@@ -5,9 +5,7 @@ package internal
 
 import (
 	"bufio"
-	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,31 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
-
-// HealthIssue is a custom type for storing healthcheck output.
-type HealthIssue struct {
-	Type    string
-	Service string
-	Message string
-}
-
-type HealthIssues []HealthIssue
-
-func (c HealthIssues) Len() int {
-	return len(c)
-}
-
-func (c HealthIssues) Less(i, j int) bool {
-	return c[i].Service < c[j].Service
-}
-
-func (c HealthIssues) Swap(i, j int) {
-	c[i], c[j] = c[j], c[i]
-}
 
 // GetCwdFromExe gets the current working directory based on "ghostwriter-cli" location.
 func GetCwdFromExe() string {
@@ -79,54 +55,6 @@ func DirExists(path string) bool {
 func CheckPath(cmd string) bool {
 	_, err := exec.LookPath(cmd)
 	return err == nil
-}
-
-// RunBasicCmd executes a given command ("name") with a list of arguments ("args")
-// and return a "string" with the output.
-func RunBasicCmd(name string, args []string) (string, error) {
-	out, err := exec.Command(name, args...).Output()
-	output := string(out[:])
-	return output, err
-}
-
-// RunRawCmd executes a given command ("name") with a list of arguments ("args")
-// Does not convert docker to docker compose like `RunCmd` does.
-func RunRawCmd(name string, args ...string) error {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		log.Fatalf("`%s` is not installed or not available in the current PATH variable", name)
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		log.Fatalf("Failed to get path to current executable")
-	}
-	exePath := filepath.Dir(exe)
-	command := exec.Command(path, args...)
-	command.Dir = exePath
-	command.Stdin = os.Stdin
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-
-	err = command.Start()
-	if err != nil {
-		log.Fatalf("Error trying to start `%s`: %v\n", name, err)
-	}
-	err = command.Wait()
-	if err != nil {
-		fmt.Printf("[-] Error from `%s`: %v\n", name, err)
-		return err
-	}
-	return nil
-}
-
-// RunCmd executes a given command ("name") with a list of arguments ("args")
-func RunCmd(name string, args []string) error {
-	// Prepend ``compose`` to the args for docker/podman commands
-	// dockerCmd will only be "docker" or "podman" (never "docker-compose")
-	if name == "docker" || name == "podman" {
-		args = append([]string{"compose"}, args...)
-	}
-	return RunRawCmd(name, args...)
 }
 
 // GetLocalGhostwriterVersion fetches the local Ghostwriter version from the "VERSION" file.
@@ -251,61 +179,6 @@ func quietTests() func() {
 		os.Stderr = serr
 		log.SetOutput(os.Stderr)
 	}
-}
-
-// CheckGhostwriterHealth fetches the latest health reports from Ghostwriter's status API endpoint.
-func CheckGhostwriterHealth(dev bool) (HealthIssues, error) {
-	var issues HealthIssues
-
-	protocol := "https"
-	port := "443"
-	if dev {
-		protocol = "http"
-		port = "8000"
-	}
-
-	baseUrl := protocol + "://localhost:" + port + "/status/"
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	client := http.Client{Timeout: time.Second * 2, Transport: transport}
-
-	req, err := http.NewRequest(http.MethodGet, baseUrl, nil)
-	if err != nil {
-		return issues, err
-	}
-
-	req.Header.Set("Accept", "application/json")
-
-	res, getErr := client.Do(req)
-
-	if res.Body != nil {
-		defer res.Body.Close()
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return issues, errors.New("Non-OK HTTP status suggests an issue with the Django or Nginx services (Code " + strconv.Itoa(res.StatusCode) + ")")
-	}
-	if getErr != nil {
-		return issues, getErr
-	}
-
-	body, readErr := io.ReadAll(res.Body)
-	if readErr != nil {
-		return issues, readErr
-	}
-
-	var results map[string]interface{}
-	jsonErr := json.Unmarshal(body, &results)
-	if jsonErr != nil {
-		return issues, jsonErr
-	}
-
-	for key := range results {
-		if results[key] != "working" {
-			issues = append(issues, HealthIssue{"Service", key, results[key].(string)})
-		}
-	}
-
-	return issues, nil
 }
 
 // AskForConfirmation asks the user for confirmation. A user must type in "yes" or "no" and

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
@@ -23,26 +24,31 @@ func init() {
 }
 
 func migrateTotp(cmd *cobra.Command, args []string) {
-	var yamlFile string
-
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		docker.SetDevMode()
-		yamlFile = "local.yml"
 	} else {
 		docker.SetProductionMode()
-		yamlFile = "production.yml"
 	}
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("Migrating TOTP secrets and migration codes from Ghostwriter <=v6 to v6.1+.\n")
 	fmt.Print("Press enter to continue, or Ctrl+C to cancel\n")
 	reader.ReadString('\n')
 
-	docker.RunDockerComposeDown(yamlFile, false)
-	fmt.Println("[+] migrating TOTP secrets and migration codes")
+	err := dockerInterface.Down(false)
+	if err != nil {
+		log.Fatalf("Error trying to bring down the containers with %s: %v\n", dockerInterface.ComposeFile, err)
+	}
 
-	docker.RunManagementCmd(yamlFile, "migrate")
-	docker.RunManagementCmd(yamlFile, "migrate_totp_device")
+	fmt.Println("[+] migrating TOTP secrets and migration codes")
+	err = dockerInterface.RunDjangoManageCommand("migrate")
+	if err != nil {
+		log.Fatalf("Error trying to migrate the database with %s: %v\n", dockerInterface.ComposeFile, err)
+	}
+	err = dockerInterface.RunDjangoManageCommand("migrate_totp_device")
+	if err != nil {
+		log.Fatalf("Error trying to migrate the TOTP devices with %s: %v\n", dockerInterface.ComposeFile, err)
+	}
 
 	fmt.Println("[+] TOTP secrets and migration codes migration complete")
 }

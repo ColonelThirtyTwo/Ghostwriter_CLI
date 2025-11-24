@@ -5,12 +5,13 @@ package internal
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/spf13/viper"
 )
 
 // Configuration is a custom type for storing configuration values as Key:Val pairs.
@@ -38,95 +39,95 @@ func (c Configurations) Swap(i, j int) {
 }
 
 // Initialize the environment variables.
-var ghostEnv = viper.New()
+var GhostEnv = viper.New()
 
 // Set sane defaults for a basic Ghostwriter deployment.
 // Defaults are geared towards a development environment.
 func setGhostwriterConfigDefaultValues() {
 	// Project configuration
-	ghostEnv.SetDefault("use_docker", "yes")
-	ghostEnv.SetDefault("ipythondir", "/app/.ipython")
+	GhostEnv.SetDefault("use_docker", "yes")
+	GhostEnv.SetDefault("ipythondir", "/app/.ipython")
 
 	// Django configuration
-	ghostEnv.SetDefault("django_mfa_always_reveal_backup_tokens", false)
-	ghostEnv.SetDefault("django_account_allow_registration", false)
-	ghostEnv.SetDefault("django_account_reauthentication_timeout", 32400)
-	ghostEnv.SetDefault("django_account_email_verification", "none")
-	ghostEnv.SetDefault("django_admin_url", "admin/")
-	ghostEnv.SetDefault("django_allowed_hosts", "localhost 127.0.0.1 django nginx host.docker.internal ghostwriter.local")
-	ghostEnv.SetDefault("django_compress_enabled", true)
-	ghostEnv.SetDefault("django_csrf_cookie_secure", false)
-	ghostEnv.SetDefault("django_csrf_trusted_origins", "")
-	ghostEnv.SetDefault("django_date_format", "d M Y")
-	ghostEnv.SetDefault("django_host", "django")
-	ghostEnv.SetDefault("django_jwt_secret_key", GenerateRandomPassword(32, false))
-	ghostEnv.SetDefault("django_mailgun_api_key", "")
-	ghostEnv.SetDefault("django_mailgun_domain", "")
-	ghostEnv.SetDefault("django_port", "8000")
-	ghostEnv.SetDefault("django_qcluster_name", "soar")
-	ghostEnv.SetDefault("django_secret_key", GenerateRandomPassword(32, false))
-	ghostEnv.SetDefault("django_secure_ssl_redirect", false)
-	ghostEnv.SetDefault("django_session_cookie_age", 32400)
-	ghostEnv.SetDefault("django_session_cookie_secure", false)
-	ghostEnv.SetDefault("django_session_expire_at_browser_close", false)
-	ghostEnv.SetDefault("django_session_save_every_request", true)
-	ghostEnv.SetDefault("django_settings_module", "config.settings.local")
-	ghostEnv.SetDefault("django_social_account_allow_registration", false)
-	ghostEnv.SetDefault("django_social_account_domain_allowlist", "")
-	ghostEnv.SetDefault("django_social_account_login_on_get", false)
-	ghostEnv.SetDefault("django_superuser_email", "admin@ghostwriter.local")
-	ghostEnv.SetDefault("django_superuser_password", GenerateRandomPassword(32, true))
-	ghostEnv.SetDefault("django_superuser_username", "admin")
-	ghostEnv.SetDefault("django_web_concurrency", 4)
+	GhostEnv.SetDefault("django_mfa_always_reveal_backup_tokens", false)
+	GhostEnv.SetDefault("django_account_allow_registration", false)
+	GhostEnv.SetDefault("django_account_reauthentication_timeout", 32400)
+	GhostEnv.SetDefault("django_account_email_verification", "none")
+	GhostEnv.SetDefault("django_admin_url", "admin/")
+	GhostEnv.SetDefault("django_allowed_hosts", "localhost 127.0.0.1 django nginx host.docker.internal ghostwriter.local")
+	GhostEnv.SetDefault("django_compress_enabled", true)
+	GhostEnv.SetDefault("django_csrf_cookie_secure", false)
+	GhostEnv.SetDefault("django_csrf_trusted_origins", "")
+	GhostEnv.SetDefault("django_date_format", "d M Y")
+	GhostEnv.SetDefault("django_host", "django")
+	GhostEnv.SetDefault("django_jwt_secret_key", GenerateRandomPassword(32, false))
+	GhostEnv.SetDefault("django_mailgun_api_key", "")
+	GhostEnv.SetDefault("django_mailgun_domain", "")
+	GhostEnv.SetDefault("django_port", "8000")
+	GhostEnv.SetDefault("django_qcluster_name", "soar")
+	GhostEnv.SetDefault("django_secret_key", GenerateRandomPassword(32, false))
+	GhostEnv.SetDefault("django_secure_ssl_redirect", false)
+	GhostEnv.SetDefault("django_session_cookie_age", 32400)
+	GhostEnv.SetDefault("django_session_cookie_secure", false)
+	GhostEnv.SetDefault("django_session_expire_at_browser_close", false)
+	GhostEnv.SetDefault("django_session_save_every_request", true)
+	GhostEnv.SetDefault("django_settings_module", "config.settings.local")
+	GhostEnv.SetDefault("django_social_account_allow_registration", false)
+	GhostEnv.SetDefault("django_social_account_domain_allowlist", "")
+	GhostEnv.SetDefault("django_social_account_login_on_get", false)
+	GhostEnv.SetDefault("django_superuser_email", "admin@ghostwriter.local")
+	GhostEnv.SetDefault("django_superuser_password", GenerateRandomPassword(32, true))
+	GhostEnv.SetDefault("django_superuser_username", "admin")
+	GhostEnv.SetDefault("django_web_concurrency", 4)
 
 	// PostgreSQL configuration
-	ghostEnv.SetDefault("postgres_host", "postgres")
-	ghostEnv.SetDefault("postgres_port", 5432)
-	ghostEnv.SetDefault("postgres_db", "ghostwriter")
-	ghostEnv.SetDefault("postgres_user", "postgres")
-	ghostEnv.SetDefault("postgres_password", GenerateRandomPassword(32, true))
-	ghostEnv.SetDefault("POSTGRES_CONN_MAX_AGE", 0)
+	GhostEnv.SetDefault("postgres_host", "postgres")
+	GhostEnv.SetDefault("postgres_port", 5432)
+	GhostEnv.SetDefault("postgres_db", "ghostwriter")
+	GhostEnv.SetDefault("postgres_user", "postgres")
+	GhostEnv.SetDefault("postgres_password", GenerateRandomPassword(32, true))
+	GhostEnv.SetDefault("POSTGRES_CONN_MAX_AGE", 0)
 
 	// Redis configuration
-	ghostEnv.SetDefault("redis_host", "redis")
-	ghostEnv.SetDefault("redis_port", 6379)
+	GhostEnv.SetDefault("redis_host", "redis")
+	GhostEnv.SetDefault("redis_port", 6379)
 
 	// Nginx configuration
-	ghostEnv.SetDefault("nginx_host", "nginx")
-	ghostEnv.SetDefault("nginx_port", 443)
+	GhostEnv.SetDefault("nginx_host", "nginx")
+	GhostEnv.SetDefault("nginx_port", 443)
 
 	// Hasura configuration
-	ghostEnv.SetDefault("hasura_graphql_action_secret", GenerateRandomPassword(32, true))
-	ghostEnv.SetDefault("hasura_graphql_admin_secret", GenerateRandomPassword(32, true))
-	ghostEnv.SetDefault("hasura_graphql_dev_mode", true)
-	ghostEnv.SetDefault("hasura_graphql_enable_console", false)
-	ghostEnv.SetDefault("hasura_graphql_enabled_log_types", "startup, http-log, webhook-log, websocket-log, query-log")
-	ghostEnv.SetDefault("hasura_graphql_enable_telemetry", false)
-	ghostEnv.SetDefault("hasura_graphql_server_host", "graphql_engine")
-	ghostEnv.SetDefault("hasura_graphql_server_hostname", "graphql_engine")
-	ghostEnv.SetDefault("hasura_graphql_insecure_skip_tls_verify", true)
-	ghostEnv.SetDefault("hasura_graphql_log_level", "warn")
-	ghostEnv.SetDefault("hasura_graphql_metadata_dir", "/metadata")
-	ghostEnv.SetDefault("hasura_graphql_migrations_dir", "/migrations")
-	ghostEnv.SetDefault("hasura_graphql_server_port", 8080)
+	GhostEnv.SetDefault("hasura_graphql_action_secret", GenerateRandomPassword(32, true))
+	GhostEnv.SetDefault("hasura_graphql_admin_secret", GenerateRandomPassword(32, true))
+	GhostEnv.SetDefault("hasura_graphql_dev_mode", true)
+	GhostEnv.SetDefault("hasura_graphql_enable_console", false)
+	GhostEnv.SetDefault("hasura_graphql_enabled_log_types", "startup, http-log, webhook-log, websocket-log, query-log")
+	GhostEnv.SetDefault("hasura_graphql_enable_telemetry", false)
+	GhostEnv.SetDefault("hasura_graphql_server_host", "graphql_engine")
+	GhostEnv.SetDefault("hasura_graphql_server_hostname", "graphql_engine")
+	GhostEnv.SetDefault("hasura_graphql_insecure_skip_tls_verify", true)
+	GhostEnv.SetDefault("hasura_graphql_log_level", "warn")
+	GhostEnv.SetDefault("hasura_graphql_metadata_dir", "/metadata")
+	GhostEnv.SetDefault("hasura_graphql_migrations_dir", "/migrations")
+	GhostEnv.SetDefault("hasura_graphql_server_port", 8080)
 
 	// Docker & Django health check configuration
-	ghostEnv.SetDefault("healthcheck_disk_usage_max", 90)
-	ghostEnv.SetDefault("healthcheck_interval", "300s")
-	ghostEnv.SetDefault("healthcheck_mem_min", 100)
-	ghostEnv.SetDefault("healthcheck_retries", 3)
-	ghostEnv.SetDefault("healthcheck_start", "60s")
-	ghostEnv.SetDefault("healthcheck_timeout", "30s")
+	GhostEnv.SetDefault("healthcheck_disk_usage_max", 90)
+	GhostEnv.SetDefault("healthcheck_interval", "300s")
+	GhostEnv.SetDefault("healthcheck_mem_min", 100)
+	GhostEnv.SetDefault("healthcheck_retries", 3)
+	GhostEnv.SetDefault("healthcheck_start", "60s")
+	GhostEnv.SetDefault("healthcheck_timeout", "30s")
 
 	// Set some helpful aliases for common settings
-	ghostEnv.RegisterAlias("date_format", "django_date_format")
-	ghostEnv.RegisterAlias("admin_password", "django_superuser_password")
-	ghostEnv.RegisterAlias("hasura_password", "hasura_graphql_admin_secret")
+	GhostEnv.RegisterAlias("date_format", "django_date_format")
+	GhostEnv.RegisterAlias("admin_password", "django_superuser_password")
+	GhostEnv.RegisterAlias("hasura_password", "hasura_graphql_admin_secret")
 }
 
 // WriteGhostwriterEnvironmentVariables writes the environment variables to the ".env" file.
 func WriteGhostwriterEnvironmentVariables() {
-	c := ghostEnv.AllSettings()
+	c := GhostEnv.AllSettings()
 	// To make it easier to read and look at, get all the keys, sort them, and display variables in order
 	keys := make([]string, 0, len(c))
 	for k := range c {
@@ -139,10 +140,10 @@ func WriteGhostwriterEnvironmentVariables() {
 	}
 	defer f.Close()
 	for _, key := range keys {
-		if len(ghostEnv.GetString(key)) == 0 {
+		if len(GhostEnv.GetString(key)) == 0 {
 			_, err = f.WriteString(fmt.Sprintf("%s=\n", strings.ToUpper(key)))
 		} else {
-			_, err = f.WriteString(fmt.Sprintf("%s='%s'\n", strings.ToUpper(key), ghostEnv.GetString(key)))
+			_, err = f.WriteString(fmt.Sprintf("%s='%s'\n", strings.ToUpper(key), GhostEnv.GetString(key)))
 		}
 
 		if err != nil {
@@ -157,10 +158,10 @@ func WriteGhostwriterEnvironmentVariables() {
 // Then write the final file with "WriteGhostwriterEnvironmentVariables()".
 func ParseGhostwriterEnvironmentVariables() {
 	setGhostwriterConfigDefaultValues()
-	ghostEnv.SetConfigName(".env")
-	ghostEnv.SetConfigType("env")
-	ghostEnv.AddConfigPath(GetCwdFromExe())
-	ghostEnv.AutomaticEnv()
+	GhostEnv.SetConfigName(".env")
+	GhostEnv.SetConfigType("env")
+	GhostEnv.AddConfigPath(GetCwdFromExe())
+	GhostEnv.AutomaticEnv()
 	// Check if expected env file exists
 	if !FileExists(filepath.Join(GetCwdFromExe(), ".env")) {
 		_, err := os.Create(filepath.Join(GetCwdFromExe(), ".env"))
@@ -169,7 +170,7 @@ func ParseGhostwriterEnvironmentVariables() {
 		}
 	}
 	// Try reading the env file
-	if err := ghostEnv.ReadInConfig(); err != nil {
+	if err := GhostEnv.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Fatalf("Error while reading in .env file: %s", err)
 		} else {
@@ -181,27 +182,27 @@ func ParseGhostwriterEnvironmentVariables() {
 
 // SetProductionMode updates the environment variables to switch to production mode.
 func SetProductionMode() {
-	ghostEnv.Set("hasura_graphql_dev_mode", false)
-	ghostEnv.Set("django_secure_ssl_redirect", true)
-	ghostEnv.Set("django_settings_module", "config.settings.production")
-	ghostEnv.Set("django_csrf_cookie_secure", true)
-	ghostEnv.Set("django_session_cookie_secure", true)
+	GhostEnv.Set("hasura_graphql_dev_mode", false)
+	GhostEnv.Set("django_secure_ssl_redirect", true)
+	GhostEnv.Set("django_settings_module", "config.settings.production")
+	GhostEnv.Set("django_csrf_cookie_secure", true)
+	GhostEnv.Set("django_session_cookie_secure", true)
 	WriteGhostwriterEnvironmentVariables()
 }
 
 // SetDevMode updates the environment variables to switch to development mode.
 func SetDevMode() {
-	ghostEnv.Set("hasura_graphql_dev_mode", true)
-	ghostEnv.Set("django_secure_ssl_redirect", false)
-	ghostEnv.Set("django_settings_module", "config.settings.local")
-	ghostEnv.Set("django_csrf_cookie_secure", false)
-	ghostEnv.Set("django_session_cookie_secure", false)
+	GhostEnv.Set("hasura_graphql_dev_mode", true)
+	GhostEnv.Set("django_secure_ssl_redirect", false)
+	GhostEnv.Set("django_settings_module", "config.settings.local")
+	GhostEnv.Set("django_csrf_cookie_secure", false)
+	GhostEnv.Set("django_session_cookie_secure", false)
 	WriteGhostwriterEnvironmentVariables()
 }
 
 // Convert the environment variable ("env") to a slice of strings.
 func splitVariable(env string) []string {
-	return strings.Split(ghostEnv.GetString(env), " ")
+	return strings.Split(GhostEnv.GetString(env), " ")
 }
 
 // Remove one or more matches for "item" from a "slice" of strings.
@@ -224,7 +225,7 @@ func appendHost(env string, host string) {
 	// Append the new host only if it's not already in the list
 	if !(Contains(s, host)) {
 		s = append(s, host)
-		ghostEnv.Set(env, strings.TrimSpace(strings.Join(s, " ")))
+		GhostEnv.Set(env, strings.TrimSpace(strings.Join(s, " ")))
 	} else {
 		log.Printf("Host %s is already in the list", host)
 	}
@@ -234,12 +235,12 @@ func appendHost(env string, host string) {
 func removeHost(env string, host string) {
 	s := splitVariable(env)
 	s = removeItem(s, host)
-	ghostEnv.Set(env, strings.TrimSpace(strings.Join(s, " ")))
+	GhostEnv.Set(env, strings.TrimSpace(strings.Join(s, " ")))
 }
 
 // GetConfigAll retrieves all values from the .env configuration file.
 func GetConfigAll() Configurations {
-	c := ghostEnv.AllSettings()
+	c := GhostEnv.AllSettings()
 	keys := make([]string, 0, len(c))
 	for k := range c {
 		keys = append(keys, k)
@@ -248,7 +249,7 @@ func GetConfigAll() Configurations {
 
 	var values Configurations
 	for _, key := range keys {
-		val := ghostEnv.GetString(key)
+		val := GhostEnv.GetString(key)
 		values = append(values, Configuration{strings.ToUpper(key), val})
 	}
 
@@ -262,7 +263,7 @@ func GetConfig(args []string) Configurations {
 	var values Configurations
 	for i := 0; i < len(args[0:]); i++ {
 		setting := strings.ToLower(args[i])
-		val := ghostEnv.GetString(setting)
+		val := GhostEnv.GetString(setting)
 		if val == "" {
 			log.Fatalf("Config variable `%s` not found", setting)
 		} else {
@@ -278,11 +279,11 @@ func GetConfig(args []string) Configurations {
 // SetConfig sets the value of the specified key in the .env file.
 func SetConfig(key string, value string) {
 	if strings.ToLower(value) == "true" {
-		ghostEnv.Set(key, true)
+		GhostEnv.Set(key, true)
 	} else if strings.ToLower(value) == "false" {
-		ghostEnv.Set(key, false)
+		GhostEnv.Set(key, false)
 	} else {
-		ghostEnv.Set(key, value)
+		GhostEnv.Set(key, value)
 	}
 	WriteGhostwriterEnvironmentVariables()
 }

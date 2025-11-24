@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
@@ -23,12 +25,16 @@ func init() {
 }
 
 func containersRestart(cmd *cobra.Command, args []string) {
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		fmt.Println("[+] Restarting the development environment")
-		docker.RunDockerComposeRestart("local.yml")
 	} else {
 		fmt.Println("[+] Restarting the production environment")
-		docker.RunDockerComposeRestart("production.yml")
+	}
+
+	fmt.Printf("[+] Restarting containers with %s...\n", dockerInterface.ComposeFile)
+	startErr := dockerInterface.RunComposeCmd("restart")
+	if startErr != nil {
+		log.Fatalf("Error trying to restart the containers with %s: %v\n", dockerInterface.ComposeFile, startErr)
 	}
 }

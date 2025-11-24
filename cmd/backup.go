@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
@@ -31,30 +33,33 @@ func init() {
 }
 
 func backupDatabase(cmd *cobra.Command, args []string) {
-	dockerErr := docker.EvaluateDockerComposeStatus()
-	if dockerErr == nil {
-		if dev {
-			docker.SetDevMode()
-			if lst {
-				fmt.Println("[+] Getting a list of available backup files in the development environment")
-				docker.RunDockerComposeBackups("local.yml")
-			} else {
-				fmt.Println("[+] Backing up the PostgreSQL database for the development environment")
-				docker.RunDockerComposeBackup("local.yml")
-				fmt.Println("[+] Backing up media files for the development environment")
-				docker.RunDockerComposeMediaBackup("local.yml")
-			}
-		} else {
-			docker.SetProductionMode()
-			if lst {
-				fmt.Println("[+] Getting a list of available backup files in the production environment")
-				docker.RunDockerComposeBackups("production.yml")
-			} else {
-				fmt.Println("[+] Backing up the PostgreSQL database for the production environment")
-				docker.RunDockerComposeBackup("production.yml")
-				fmt.Println("[+] Backing up media files for the production environment")
-				docker.RunDockerComposeMediaBackup("production.yml")
-			}
-		}
+	dockerInterface := docker.GetDockerInterface(dev)
+
+	if dev {
+		docker.SetDevMode()
+	} else {
+		docker.SetProductionMode()
+	}
+
+	if lst {
+		listBackups(dockerInterface)
+	} else {
+		backup(dockerInterface)
+	}
+}
+
+func listBackups(dockerInterface *docker.DockerInterface) {
+	fmt.Printf("[+] Listing avilable PostgreSQL database backup files with %s...\n", dockerInterface.ComposeFile)
+	err := dockerInterface.RunComposeCmd("run", "--rm", "postgres", "backups")
+	if err != nil {
+		log.Fatalf("Error trying to list backups files with %s: %v\n", dockerInterface.ComposeFile, err)
+	}
+}
+
+func backup(dockerInterface *docker.DockerInterface) {
+	fmt.Printf("[+] Backing up the PostgreSQL database with %s...\n", dockerInterface.ComposeFile)
+	err := dockerInterface.RunComposeCmd("run", "--rm", "postgres", "backup")
+	if err != nil {
+		log.Fatalf("Error trying to back up the PostgreSQL database with %s: %v\n", dockerInterface.ComposeFile, err)
 	}
 }

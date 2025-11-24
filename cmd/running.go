@@ -26,7 +26,7 @@ func init() {
 }
 
 func displayRunning(cmd *cobra.Command, args []string) {
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	// initialize tabwriter
 	writer := new(tabwriter.Writer)
 	// Set minwidth, tabwidth, padding, padchar, and flags
@@ -36,7 +36,7 @@ func displayRunning(cmd *cobra.Command, args []string) {
 
 	fmt.Println("[+] Collecting list of running Ghostwriter containers...")
 
-	containers := docker.GetRunning()
+	containers := dockerInterface.GetRunning()
 	fmt.Printf("[+] Found %d running Ghostwriter containers\n", len(containers))
 
 	if len(containers) > 0 {

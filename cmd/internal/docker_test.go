@@ -1,10 +1,11 @@
 package internal
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEvaluateDockerComposeStatus(t *testing.T) {
@@ -21,8 +22,7 @@ func TestEvaluateDockerComposeStatus(t *testing.T) {
 	defer local.Close()
 	defer prod.Close()
 
-	result := EvaluateDockerComposeStatus()
-	assert.NoError(t, result, "Expected `EvaluateDockerComposeStatus()` to return no error")
+	GetDockerInterface(true)
 }
 
 // Note: The media backup and restore functions (RunDockerComposeMediaBackup and RunDockerComposeMediaRestore)

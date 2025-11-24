@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
@@ -23,14 +25,16 @@ func init() {
 }
 
 func containersUp(cmd *cobra.Command, args []string) {
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		fmt.Println("[+] Bringing up the development environment")
 		docker.SetDevMode()
-		docker.RunDockerComposeUp("local.yml")
 	} else {
 		fmt.Println("[+] Bringing up the production environment")
 		docker.SetProductionMode()
-		docker.RunDockerComposeUp("production.yml")
+	}
+	err := dockerInterface.Up()
+	if err != nil {
+		log.Fatalf("Error trying to bring up the containers with %s: %v\n", dockerInterface.ComposeFile, err)
 	}
 }

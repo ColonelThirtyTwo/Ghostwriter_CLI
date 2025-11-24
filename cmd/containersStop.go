@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
@@ -23,12 +25,16 @@ func init() {
 }
 
 func containersStop(cmd *cobra.Command, args []string) {
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		fmt.Println("[+] Stopping the development environment")
-		docker.RunDockerComposeStop("local.yml")
 	} else {
 		fmt.Println("[+] Stopping the production environment")
-		docker.RunDockerComposeStop("production.yml")
+	}
+
+	fmt.Printf("[+] Stopping services with %s...\n", dockerInterface.ComposeFile)
+	stopErr := dockerInterface.RunComposeCmd("stop")
+	if stopErr != nil {
+		log.Fatalf("Error trying to stop services with %s: %v\n", dockerInterface.ComposeFile, stopErr)
 	}
 }

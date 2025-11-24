@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
@@ -27,12 +29,14 @@ func init() {
 }
 
 func containersDown(cmd *cobra.Command, args []string) {
-	docker.EvaluateDockerComposeStatus()
+	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		fmt.Println("[+] Bringing down the development environment")
-		docker.RunDockerComposeDown("local.yml", volumes)
 	} else {
 		fmt.Println("[+] Bringing down the production environment")
-		docker.RunDockerComposeDown("production.yml", volumes)
+	}
+	err := dockerInterface.Down(volumes)
+	if err != nil {
+		log.Fatalf("Error trying to bring down the containers with %s: %v\n", dockerInterface.ComposeFile, err)
 	}
 }

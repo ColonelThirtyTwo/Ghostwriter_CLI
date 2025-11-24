@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,21 +18,151 @@ import (
 // Vars for tracking the list of Ghostwriter images
 // Used for filtering the list of containers returned by the Docker client
 var (
-	prodImages = []string{
+	ProdImages = []string{
 		"ghostwriter_production_django", "ghostwriter_production_nginx",
 		"ghostwriter_production_redis", "ghostwriter_production_postgres",
 		"ghostwriter_production_graphql", "ghostwriter_production_queue",
 		"ghostwriter_production_collab_server",
 	}
-	devImages = []string{
+	DevImages = []string{
 		"ghostwriter_local_django", "ghostwriter_local_redis",
 		"ghostwriter_local_postgres", "ghostwriter_local_graphql",
 		"ghostwriter_local_queue", "ghostwriter_local_collab_server",
 		"ghostwriter_local_frontend",
 	}
-	// Default root command for Docker commands, will fallback to Podman if Docker is not found
-	dockerCmd = "docker"
 )
+
+type DockerInterface struct {
+	// Directory that docker compose file resides in
+	Dir string
+	// Docker compose file to use
+	ComposeFile string
+	// Command to use, either docker or podman
+	command string
+}
+
+func GetDockerInterface(dev bool) *DockerInterface {
+	fmt.Println("[+] Checking the status of Docker and the Compose plugin...")
+	// Check for ``docker`` first because it's required for everything to come
+	dockerExists := CheckPath("docker")
+	dockerCmd := "docker"
+	if !dockerExists {
+		podmanExists := CheckPath("podman")
+		if podmanExists {
+			fmt.Println("[+] Docker is not installed, but Podman is installed. Using Podman as a Docker alternative.")
+			dockerCmd = "podman"
+		} else {
+			log.Fatalln("Neither Docker nor Podman is installed on this system, so please install Docker or Podman (in Docker compatibility mode) and try again.")
+		}
+	}
+
+	// Check if the Docker Engine is running
+	_, engineErr := exec.Command(dockerCmd, "info").Output()
+	if engineErr != nil {
+		if strings.Contains(strings.ToLower(engineErr.Error()), "permission denied") {
+			log.Fatalf("%s is installed, but you don't have permission to talk to the daemon (Try running with sudo or adjusting your group membership)", dockerCmd)
+		} else {
+			log.Fatalf("%s is installed on this system, but the daemon may not be running", dockerCmd)
+		}
+	}
+
+	// Check for the ``compose`` plugin as our first choice
+	_, composeErr := exec.Command(dockerCmd, "compose", "version").Output()
+	if composeErr != nil {
+		// Check if the deprecated v1 script is installed
+		composeScriptExists := CheckPath("docker-compose")
+		if composeScriptExists {
+			fmt.Println("[!] The deprecated `docker-compose` v1 script was detected on your system")
+			fmt.Println("[!] Docker has deprecated v1 and this CLI tool no longer supports it")
+			log.Fatalln("Please upgrade to Docker Compose v2 and try again: https://docs.docker.com/compose/install/")
+		} else {
+			log.Fatalln("Docker Compose is not installed, so please install it and try again: https://docs.docker.com/compose/install/")
+		}
+	}
+
+	dir := GetCwdFromExe()
+
+	file := ""
+	if dev {
+		file = "local.yml"
+	} else {
+		file = "production.yml"
+	}
+
+	// Bail out if we're not in the same directory as the YAML files
+	// Otherwise, we'll get a confusing error message from the `compose` plugin
+	if !FileExists(filepath.Join(dir, file)) {
+		log.Fatalln("Ghostwriter CLI must be run in the same directory as the `local.yml` and `production.yml` files")
+	}
+
+	return &DockerInterface{
+		Dir:         dir,
+		ComposeFile: file,
+		command:     dockerCmd,
+	}
+}
+
+// Runs docker/podman with the specified additional arguments, in the proper CWD with the env and compose files.
+// Basis for most of the other Run commands.
+func (this DockerInterface) RunCmd(args ...string) error {
+	path, err := exec.LookPath(this.command)
+	if err != nil {
+		log.Fatalf("`%s` is not installed or not available in the current PATH variable", this.command)
+	}
+	command := exec.Command(path, args...)
+	command.Dir = this.Dir
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+
+	err = command.Start()
+	if err != nil {
+		log.Fatalf("Error trying to start `%s`: %v\n", this.command, err)
+	}
+	err = command.Wait()
+	if err != nil {
+		fmt.Printf("[-] Error from `%s`: %v\n", this.command, err)
+		return err
+	}
+	return nil
+}
+
+// Similar to `RunCmd` but returns stdout
+func (this DockerInterface) RunCmdWithOutput(args ...string) (string, error) {
+	path, err := exec.LookPath(this.command)
+	if err != nil {
+		log.Fatalf("`%s` is not installed or not available in the current PATH variable", this.command)
+	}
+	command := exec.Command(path, args...)
+	command.Dir = this.Dir
+	command.Stdin = os.Stdin
+	command.Stderr = os.Stderr
+	out, err := command.Output()
+	output := string(out[:])
+	return output, err
+}
+
+// Runs a `docker compose` subcommand, pointing to the configured compose file, with additional arguments.
+func (this DockerInterface) RunComposeCmd(args ...string) error {
+	args = append([]string{"compose", "-f", this.ComposeFile}, args...)
+	return this.RunCmd(args...)
+}
+
+// / Bring all containers up
+func (this DockerInterface) Up() error {
+	fmt.Printf("[+] Running `%s` to bring up the containers with %s...\n", this.command, this.ComposeFile)
+	return this.RunComposeCmd("up", "-d")
+}
+
+// / Take down all containers
+func (this DockerInterface) Down(volumes bool) error {
+	fmt.Printf("[+] Running `%s` to take down the containers with %s...\n", this.command, this.ComposeFile)
+	args := []string{"down"}
+	if volumes {
+		args = append(args, "--volumes")
+	}
+	return this.RunComposeCmd(args...)
+}
 
 // Container is a custom type for storing container information similar to output from "docker containers ls".
 type Container struct {
@@ -62,211 +191,34 @@ func (c Containers) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// EvaluateDockerComposeStatus determines if the host has the "docker compose" plugin or the "docker compose"
-// script installed and set the global `dockerCmd` variable.
-func EvaluateDockerComposeStatus() error {
-	fmt.Println("[+] Checking the status of Docker and the Compose plugin...")
-	// Check for ``docker`` first because it's required for everything to come
-	dockerExists := CheckPath("docker")
-	if !dockerExists {
-		podmanExists := CheckPath("podman")
-		if podmanExists {
-			fmt.Println("[+] Docker is not installed, but Podman is installed. Using Podman as a Docker alternative.")
-			dockerCmd = "podman"
-		} else {
-			log.Fatalln("Neither Docker nor Podman is installed on this system, so please install Docker or Podman (in Docker compatibility mode) and try again.")
+// Gets a list of all running containers
+func (this DockerInterface) GetRunning() Containers {
+	var running Containers
+
+	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Failed to get client connection to Docker: %v", err)
+	}
+	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{
+		All: false,
+	})
+	if err != nil {
+		log.Fatalf("Failed to get container list from Docker: %v", err)
+	}
+
+	for _, container := range containers.Items {
+		if Contains(DevImages, container.Image) || Contains(ProdImages, container.Image) {
+			running = append(running, Container{
+				container.ID, container.Image, container.Status, container.Ports, container.Labels["name"],
+			})
 		}
 	}
 
-	// Check if the Docker Engine is running
-	_, engineErr := RunBasicCmd(dockerCmd, []string{"info"})
-	if engineErr != nil {
-		if strings.Contains(strings.ToLower(engineErr.Error()), "permission denied") {
-			log.Fatalf("%s is installed, but you don't have permission to talk to the daemon (Try running with sudo or adjusting your group membership)", dockerCmd)
-		} else {
-			log.Fatalf("%s is installed on this system, but the daemon may not be running", dockerCmd)
-		}
-	}
-
-	// Check for the ``compose`` plugin as our first choice
-	_, composeErr := RunBasicCmd(dockerCmd, []string{"compose", "version"})
-	if composeErr != nil {
-		// Check if the deprecated v1 script is installed
-		composeScriptExists := CheckPath("docker-compose")
-		if composeScriptExists {
-			fmt.Println("[!] The deprecated `docker-compose` v1 script was detected on your system")
-			fmt.Println("[!] Docker has deprecated v1 and this CLI tool no longer supports it")
-			log.Fatalln("Please upgrade to Docker Compose v2 and try again: https://docs.docker.com/compose/install/")
-		} else {
-			log.Fatalln("Docker Compose is not installed, so please install it and try again: https://docs.docker.com/compose/install/")
-		}
-	}
-
-	// Bail out if we're not in the same directory as the YAML files
-	// Otherwise, we'll get a confusing error message from the `compose` plugin
-	if !FileExists(filepath.Join(GetCwdFromExe(), "local.yml")) || !FileExists(filepath.Join(GetCwdFromExe(), "production.yml")) {
-		log.Fatalln("Ghostwriter CLI must be run in the same directory as the `local.yml` and `production.yml` files")
-	}
-
-	return nil
+	return running
 }
 
-// RunDockerComposeInstall executes the "docker compose" commands for a first-time installation with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeInstall(yaml string) {
-	buildErr := RunCmd(dockerCmd, []string{"-f", yaml, "build"})
-	if buildErr != nil {
-		log.Fatalf("Error trying to build with %s: %v\n", yaml, buildErr)
-	}
-	upErr := RunCmd(dockerCmd, []string{"-f", yaml, "up", "-d"})
-	if upErr != nil {
-		log.Fatalf("Error trying to bring up environment with %s: %v\n", yaml, upErr)
-	}
-	// Must wait for Django to complete db migrations before seeding the database
-	for {
-		if waitForDjango() {
-			fmt.Println("[+] Proceeding with Django database setup...")
-			seedErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "--rm", "django", "/seed_data"})
-			if seedErr != nil {
-				log.Fatalf("Error trying to seed the database: %v\n", seedErr)
-			}
-			fmt.Println("[+] Proceeding with Django superuser creation...")
-			userErr := RunCmd(
-				dockerCmd, []string{"-f", yaml, "run", "--rm", "django", "python",
-					"manage.py", "createsuperuser", "--noinput", "--role", "admin"},
-			)
-			// This may fail if the user has already created a superuser, so we don't exit
-			if userErr != nil {
-				log.Printf("Error trying to create a superuser: %v\n", userErr)
-				log.Println("Error may occur if you've run `install` before or made a superuser manually")
-			}
-			break
-		}
-	}
-	// Restart Hasura to ensure metadata matches post-migrations and seeding
-	restartErr := RunCmd(dockerCmd, []string{"-f", yaml, "restart", "graphql_engine"})
-	if restartErr != nil {
-		fmt.Printf("[-] Error trying to restart the `graphql_engine` service: %v\n", restartErr)
-	}
-	fmt.Println("[+] Ghostwriter is ready to go!")
-	fmt.Printf("[+] You can login as `%s` with this password: %s\n", ghostEnv.GetString("django_superuser_username"), ghostEnv.GetString("django_superuser_password"))
-	fmt.Println("[+] You can get your admin password by running: ghostwriter-cli config get admin_password")
-}
-
-// RunDockerComposeUninstall executes the "docker compose" commands to bring down containers and remove containers,
-// images, and volumes with the specified YAML file ("yaml" parameter).
-func RunDockerComposeUninstall(yaml string) {
-	c := AskForConfirmation("[!] This command removes all containers, images, and volume data for the target environment. Are you sure you want to uninstall?")
-	if !c {
-		os.Exit(0)
-	}
-	uninstallErr := RunCmd(dockerCmd, []string{"-f", yaml, "down", "--rmi", "all", "-v", "--remove-orphans"})
-	if uninstallErr != nil {
-		log.Fatalf("Error trying to uninstall with %s: %v\n", yaml, uninstallErr)
-	}
-	fmt.Println("[+] Uninstall was successful. You can re-install with `./ghostwriter-cli install`.")
-}
-
-// RunDockerComposeUpgrade executes the "docker compose" commands for re-building or upgrading an
-// installation with the specified YAML file ("yaml" parameter).
-func RunDockerComposeUpgrade(yaml string, skipseed bool) {
-	fmt.Printf("[+] Running `%s` commands to build containers with %s...\n", dockerCmd, yaml)
-	downErr := RunCmd(dockerCmd, []string{"-f", yaml, "down"})
-	if downErr != nil {
-		log.Fatalf("Error trying to bring down any running containers with %s: %v\n", yaml, downErr)
-	}
-	buildErr := RunCmd(dockerCmd, []string{"-f", yaml, "build"})
-	if buildErr != nil {
-		log.Fatalf("Error trying to build with %s: %v\n", yaml, buildErr)
-	}
-	upErr := RunCmd(dockerCmd, []string{"-f", yaml, "up", "-d"})
-	if upErr != nil {
-		log.Fatalf("Error trying to bring up environment with %s: %v\n", yaml, upErr)
-	}
-	if !skipseed {
-		// Must wait for Django to complete any potential db migrations before re-seeding the database
-		for {
-			if waitForDjango() {
-				fmt.Println("[+] Re-seeding database in case initial values were added or adjusted...")
-				seedErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "--rm", "django", "/seed_data"})
-				if seedErr != nil {
-					log.Fatalf("Error trying to seed the database: %v\n", seedErr)
-				}
-				break
-			}
-		}
-	} else {
-		fmt.Println("[+] The `--skip-seed` flag was set, so skipped database seeding...")
-	}
-	fmt.Println("[+] All containers have been built!")
-}
-
-// RunDockerComposeStart executes the "docker compose" commands to start the environment with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeStart(yaml string) {
-	fmt.Printf("[+] Running `%s` to restart containers with %s...\n", dockerCmd, yaml)
-	startErr := RunCmd(dockerCmd, []string{"-f", yaml, "start"})
-	if startErr != nil {
-		log.Fatalf("Error trying to restart the containers with %s: %v\n", yaml, startErr)
-	}
-}
-
-// RunDockerComposeStop executes the "docker compose" commands to stop all services in the environment with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeStop(yaml string) {
-	fmt.Printf("[+] Running `%s` to stop services with %s...\n", dockerCmd, yaml)
-	stopErr := RunCmd(dockerCmd, []string{"-f", yaml, "stop"})
-	if stopErr != nil {
-		log.Fatalf("Error trying to stop services with %s: %v\n", yaml, stopErr)
-	}
-}
-
-// RunDockerComposeRestart executes the "docker compose" commands to restart the environment with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeRestart(yaml string) {
-	fmt.Printf("[+] Running `%s` to restart containers with %s...\n", dockerCmd, yaml)
-	startErr := RunCmd(dockerCmd, []string{"-f", yaml, "restart"})
-	if startErr != nil {
-		log.Fatalf("Error trying to restart the containers with %s: %v\n", yaml, startErr)
-	}
-}
-
-// RunDockerComposeUp executes the "docker compose" commands to bring up the environment with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeUp(yaml string) {
-	fmt.Printf("[+] Running `%s` to bring up the containers with %s...\n", dockerCmd, yaml)
-	upErr := RunCmd(dockerCmd, []string{"-f", yaml, "up", "-d"})
-	if upErr != nil {
-		log.Fatalf("Error trying to bring up the containers with %s: %v\n", yaml, upErr)
-	}
-}
-
-// RunDockerComposeDown executes the "docker compose" commands to bring down the environment with
-// the specified YAML file ("yaml" parameter).
-func RunDockerComposeDown(yaml string, volumes bool) {
-	fmt.Printf("[+] Running `%s` to bring down the containers with %s...\n", dockerCmd, yaml)
-	args := []string{"-f", yaml, "down"}
-	if volumes {
-		args = append(args, "--volumes")
-	}
-	downErr := RunCmd(dockerCmd, []string{"-f", yaml, "down"})
-	if downErr != nil {
-		log.Fatalf("Error trying to bring down the containers with %s: %v\n", yaml, downErr)
-	}
-}
-
-// RunManagementCmd executes the "docker compose" commands to execute the provided management command ("mgmt" parameter)
-// with the specified YAML file ("yaml" parameter).
-func RunManagementCmd(yaml string, mgmt string) {
-	fmt.Printf("[+] Running `%s` to execute the `%s` management command with `%s...\n", dockerCmd, mgmt, yaml)
-	mgmtErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "django", "python", "manage.py", mgmt})
-	if mgmtErr != nil {
-		log.Fatalf("Error trying to execute the management command with %s: %v\n", yaml, mgmtErr)
-	}
-}
-
-// FetchLogs fetches logs from the container with the specified "name" label ("containerName" parameter).
-func FetchLogs(containerName string, lines string) []string {
+// Gets logs from a container
+func (this DockerInterface) FetchLogs(containerName string, lines string) []string {
 	var logs []string
 	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -310,36 +262,9 @@ func FetchLogs(containerName string, lines string) []string {
 	return logs
 }
 
-// GetRunning determines if the container with the specified "name" label ("containerName" parameter) is running.
-func GetRunning() Containers {
-	var running Containers
-
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Failed to get client connection to Docker: %v", err)
-	}
-	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{
-		All: false,
-	})
-	if err != nil {
-		log.Fatalf("Failed to get container list from Docker: %v", err)
-	}
-	if len(containers.Items) > 0 {
-		for _, container := range containers.Items {
-			if Contains(devImages, container.Image) || Contains(prodImages, container.Image) {
-				running = append(running, Container{
-					container.ID, container.Image, container.Status, container.Ports, container.Labels["name"],
-				})
-			}
-		}
-	}
-
-	return running
-}
-
 // Determine if the container with the specified "name" label ("containerName" parameter) is running.
-func isServiceRunning(containerName string) bool {
-	containers := GetRunning()
+func (this DockerInterface) IsServiceRunning(containerName string) bool {
+	containers := this.GetRunning()
 	for _, container := range containers {
 		if container.Name == strings.ToLower(containerName) {
 			return true
@@ -350,9 +275,9 @@ func isServiceRunning(containerName string) bool {
 
 // Determine if the Django application has completed startup based on
 // the "Application startup complete" log message.
-func isDjangoStarted() bool {
+func (this DockerInterface) IsDjangoStarted() bool {
 	expectedString := "Application startup complete"
-	logs := FetchLogs("ghostwriter_django", "500")
+	logs := this.FetchLogs("ghostwriter_django", "500")
 	for _, entry := range logs {
 		result := strings.Contains(entry, expectedString)
 		if result {
@@ -363,9 +288,9 @@ func isDjangoStarted() bool {
 }
 
 // Check if PostgreSQL is having trouble starting due to a password mismatch.
-func isPostgresStarted() bool {
+func (this DockerInterface) IsPostgresStarted() bool {
 	expectedString := "Password does not match for user"
-	logs := FetchLogs("ghostwriter_postgres", "100")
+	logs := this.FetchLogs("ghostwriter_postgres", "100")
 	for _, entry := range logs {
 		result := strings.Contains(entry, expectedString)
 		if result {
@@ -376,20 +301,20 @@ func isPostgresStarted() bool {
 }
 
 // Determine if the Ghostwriter application has completed startup
-func waitForDjango() bool {
+func (this DockerInterface) WaitForDjango() bool {
 	// Wait for ghostwriter to start running
 	fmt.Println("[+] Waiting for Django application startup to complete...")
 	counter := 0
 	for {
-		if !isServiceRunning("ghostwriter_django") {
+		if !this.IsServiceRunning("ghostwriter_django") {
 			fmt.Print("\n")
 			log.Fatalf("Django container exited unexpectedly. Check the logs in docker for the ghostwriter_django container")
 		}
-		if isDjangoStarted() {
+		if this.IsDjangoStarted() {
 			fmt.Print("\n[+] Django application started\n")
 			return true
 		}
-		if isPostgresStarted() {
+		if this.IsPostgresStarted() {
 			fmt.Print("\n")
 			log.Fatalf("PostgreSQL cannot start because of a password mismatch. Please read: https://www.ghostwriter.wiki/getting-help/faq#ghostwriter-cli-reports-an-issue-with-postgresql")
 		}
@@ -405,216 +330,13 @@ func waitForDjango() bool {
 	}
 }
 
-// RunGhostwriterTests runs Ghostwriter's unit and integration tests via "docker compose".
-// The tests are run in the development environment and assume certain values
-// will be set for test conditions, so the .env file is temporarily adjusted
-// during the test run.
-func RunGhostwriterTests() {
-	// Save the current env values we're about to change
-	currentActionSecret := ghostEnv.Get("HASURA_GRAPHQL_ACTION_SECRET")
-	currentSettingsModule := ghostEnv.Get("DJANGO_SETTINGS_MODULE")
-
-	// Change env values for the test conditions
-	ghostEnv.Set("HASURA_GRAPHQL_ACTION_SECRET", "changeme")
-	ghostEnv.Set("DJANGO_SETTINGS_MODULE", "config.settings.local")
-	WriteGhostwriterEnvironmentVariables()
-
-	// Run the unit tests
-	testErr := RunCmd(dockerCmd, []string{"-f", "local.yml", "run", "--rm", "django", "python", "manage.py", "test"})
-	if testErr != nil {
-		log.Fatalf("Error trying to run Ghostwriter's tests: %v\n", testErr)
-	}
-
-	// Reset the changed env values
-	ghostEnv.Set("HASURA_GRAPHQL_ACTION_SECRET", currentActionSecret)
-	ghostEnv.Set("DJANGO_SETTINGS_MODULE", currentSettingsModule)
-	WriteGhostwriterEnvironmentVariables()
+// / Runs the django manage.py script, with the specified arguments
+func (this DockerInterface) RunDjangoManageCommand(args ...string) error {
+	args = append([]string{"run", "django", "python", "manage.py"}, args...)
+	return this.RunComposeCmd(args...)
 }
 
-// CheckDockerHealth determines if all containers are running and passing their respective health checks.
-func CheckDockerHealth(dev bool) (HealthIssues, error) {
-	var found []string
-	var imageName string
-	var issues HealthIssues
-
-	requiredImages := prodImages
-	if dev {
-		requiredImages = devImages
-	}
-
-	// Check running containers to make sure every necessary container is up
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return issues, err
-	}
-
-	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{
-		All: false,
-	})
-	if err != nil {
-		return issues, err
-	}
-
-	if len(containers.Items) > 0 {
-		for _, container := range containers.Items {
-			if Contains(devImages, container.Image) || Contains(prodImages, container.Image) {
-				found = append(found, container.Image)
-			}
-		}
-		for _, image := range requiredImages {
-			if !Contains(found, image) {
-				imageName = strings.ToUpper(image[strings.LastIndex(image, "_")+1:])
-				issues = append(issues, HealthIssue{"Container", imageName, "Container is not running"})
-			}
-		}
-	} else {
-		issues = append(issues, HealthIssue{"Container", "ALL", "No Ghostwriter containers are running"})
-	}
-
-	return issues, nil
-}
-
-// RunDockerComposeBackup executes the "docker compose" command to back up the PostgreSQL database in the environment
-// from the specified YAML file ("yaml" parameter).
-func RunDockerComposeBackup(yaml string) {
-	fmt.Printf("[+] Running `%s` to back up the PostgreSQL database with %s...\n", dockerCmd, yaml)
-	backupErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "--rm", "postgres", "backup"})
-	if backupErr != nil {
-		log.Fatalf("Error trying to back up the PostgreSQL database with %s: %v\n", yaml, backupErr)
-	}
-}
-
-// RunDockerComposeBackups executes the "docker compose" command to list available PostgreSQL database backups in the
-// environment from the specified YAML file ("yaml" parameter).
-func RunDockerComposeBackups(yaml string) {
-	fmt.Printf("[+] Running `%s` to list avilable PostgreSQL database backup files with %s...\n", dockerCmd, yaml)
-	backupErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "--rm", "postgres", "backups"})
-	if backupErr != nil {
-		log.Fatalf("Error trying to list backups files with %s: %v\n", yaml, backupErr)
-	}
-}
-
-// RunDockerComposeRestore executes the "docker compose" command to restore a PostgreSQL database backup in the
-// environment from the specified YAML file ("yaml" parameter).
-func RunDockerComposeRestore(yaml string, restore string) {
-	fmt.Printf("[+] Running `%s` to restore the PostgreSQL database backup file %s with %s...\n", dockerCmd, restore, yaml)
-	backupErr := RunCmd(dockerCmd, []string{"-f", yaml, "run", "--rm", "postgres", "restore", restore})
-	if backupErr != nil {
-		log.Fatalf("Error trying to restore %s with %s: %v\n", restore, yaml, backupErr)
-	}
-}
-
-// RunDockerComposeMediaBackup executes the "docker compose" command to back up the media files in the environment
-// from the specified YAML file ("yaml" parameter).
-func RunDockerComposeMediaBackup(yaml string) {
-	// Determine the volume names based on the environment
-	var dataVolume, backupVolume string
-	if yaml == "local.yml" {
-		dataVolume = "ghostwriter_local_data"
-		backupVolume = "ghostwriter_local_postgres_data_backups"
-	} else {
-		dataVolume = "ghostwriter_production_data"
-		backupVolume = "ghostwriter_production_postgres_data_backups"
-	}
-
-	// Generate timestamp for backup filename
-	timestamp := time.Now().Format("2006_01_02T15_04_05")
-	backupFilename := fmt.Sprintf("media_backup_%s.tar.gz", timestamp)
-
-	fmt.Printf("[+] Running `%s` to back up media files from %s...\n", dockerCmd, dataVolume)
-
-	// Create a tar.gz archive of the media volume and store it in the backups volume
-	// We use the postgres container because it has access to both volumes
-	backupErr := RunCmd(dockerCmd, []string{
-		"-f", yaml, "run", "--rm",
-		"-v", fmt.Sprintf("%s:/source:ro", dataVolume),
-		"-v", fmt.Sprintf("%s:/backups", backupVolume),
-		"postgres",
-		"sh", "-c",
-		fmt.Sprintf("tar czf /backups/%s -C /source .", backupFilename),
-	})
-	if backupErr != nil {
-		log.Fatalf("Error trying to back up media files with %s: %v\n", yaml, backupErr)
-	}
-	fmt.Printf("[+] Media backup created: %s\n", backupFilename)
-}
-
-// RunDockerComposeMediaRestore executes the "docker compose" command to restore media files backup in the
-// environment from the specified YAML file ("yaml" parameter).
-func RunDockerComposeMediaRestore(yaml string, restore string) {
-	// Determine the volume names based on the environment
-	var dataVolume, backupVolume string
-	if yaml == "local.yml" {
-		dataVolume = "ghostwriter_local_data"
-		backupVolume = "ghostwriter_local_postgres_data_backups"
-	} else {
-		dataVolume = "ghostwriter_production_data"
-		backupVolume = "ghostwriter_production_postgres_data_backups"
-	}
-
-	fmt.Printf("[+] Running `%s` to restore media files from backup %s with %s...\n", dockerCmd, restore, yaml)
-
-	// First, clear the existing media files
-	fmt.Println("[+] Clearing existing media files...")
-	clearErr := RunCmd(dockerCmd, []string{
-		"-f", yaml, "run", "--rm",
-		"-v", fmt.Sprintf("%s:/data", dataVolume),
-		"postgres",
-		"sh", "-c",
-		"rm -rf /data/* /data/..?* /data/.[!.]*",
-	})
-	if clearErr != nil {
-		log.Fatalf("Error trying to clear existing media files with %s: %v\n", yaml, clearErr)
-	}
-
-	// Extract the backup archive to the media volume
-	fmt.Println("[+] Extracting media backup...")
-	restoreErr := RunCmd(dockerCmd, []string{
-		"-f", yaml, "run", "--rm",
-		"-v", fmt.Sprintf("%s:/data", dataVolume),
-		"-v", fmt.Sprintf("%s:/backups:ro", backupVolume),
-		"postgres",
-		"sh", "-c",
-		fmt.Sprintf("tar xzf /backups/%s -C /data", restore),
-	})
-	if restoreErr != nil {
-		log.Fatalf("Error trying to restore media files from %s with %s: %v\n", restore, yaml, restoreErr)
-	}
-	fmt.Printf("[+] Media files restored from %s\n", restore)
-}
-
-// Gets the major version number of the PostgreSQL installation
-func PostgresVersionInstalled(
-	yaml string,
-) int {
-	out, err := RunBasicCmd("docker", []string{"compose", "-f", yaml, "run", "--rm", "postgres", "psql", "--version"})
-	if err != nil {
-		log.Fatalf("Error trying to get postgresql server version: %v\n", err)
-	}
-
-	match := regexp.MustCompile(`(\d+)\.\d+`).FindStringSubmatch(out)
-	if len(match) == 0 {
-		log.Fatalf("Could not find version in string %v", out)
-	}
-
-	majorVersion, err := strconv.Atoi(match[1])
-	if err != nil {
-		log.Fatalf("Could not parse installed Postgres version of %v: %v", match[1], err)
-	}
-	return majorVersion
-}
-
-// Gets the major version number of the PostgreSQL data. If different from the installation version, an upgrade is needed.
-func PostgresVersionForData(
-	yaml string,
-) int {
-	out, err := RunBasicCmd("docker", []string{"compose", "-f", yaml, "run", "--rm", "postgres", "cat", "/var/lib/postgresql/data/PG_VERSION"})
-	if err != nil {
-		log.Fatalf("Error trying to get postgresql data version: %v\n", err)
-	}
-	majorVersion, err := strconv.Atoi(strings.TrimSpace(out))
-	if err != nil {
-		log.Fatalf("Error trying to parse postgresql data version string %v: %v\n", out, err)
-	}
-	return majorVersion
+func checkCmd(exe string, args ...string) error {
+	_, err := exec.Command(exe, args...).Output()
+	return err
 }
