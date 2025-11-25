@@ -39,6 +39,8 @@ type DockerInterface struct {
 	ComposeFile string
 	// Command to use, either docker or podman
 	command string
+	// Daemon client, lazily initialized
+	client *client.Client
 }
 
 func GetDockerInterface(dev bool) *DockerInterface {
@@ -195,7 +197,7 @@ func (c Containers) Swap(i, j int) {
 func (this DockerInterface) GetRunning() Containers {
 	var running Containers
 
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := this.GetDaemonClient()
 	if err != nil {
 		log.Fatalf("Failed to get client connection to Docker: %v", err)
 	}
@@ -220,7 +222,7 @@ func (this DockerInterface) GetRunning() Containers {
 // Gets logs from a container
 func (this DockerInterface) FetchLogs(containerName string, lines string) []string {
 	var logs []string
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := this.GetDaemonClient()
 	if err != nil {
 		log.Fatalf("Failed to get client in logs: %v", err)
 	}
@@ -330,13 +332,19 @@ func (this DockerInterface) WaitForDjango() bool {
 	}
 }
 
-// / Runs the django manage.py script, with the specified arguments
+// Runs the django manage.py script, with the specified arguments
 func (this DockerInterface) RunDjangoManageCommand(args ...string) error {
 	args = append([]string{"run", "django", "python", "manage.py"}, args...)
 	return this.RunComposeCmd(args...)
 }
 
-func checkCmd(exe string, args ...string) error {
-	_, err := exec.Command(exe, args...).Output()
-	return err
+// Connects to the docker daemon
+func (this DockerInterface) GetDaemonClient() (*client.Client, error) {
+	if this.client != nil {
+		return this.client, nil
+	}
+
+	client, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	this.client = client
+	return this.client, err
 }

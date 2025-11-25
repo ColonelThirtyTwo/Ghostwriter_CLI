@@ -113,7 +113,7 @@ func checkDockerHealth(dockerInterface *docker.DockerInterface) (HealthIssues, e
 	}
 
 	// Check running containers to make sure every necessary container is up
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := dockerInterface.GetDaemonClient()
 	if err != nil {
 		return issues, err
 	}
