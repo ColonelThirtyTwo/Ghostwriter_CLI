@@ -31,12 +31,11 @@ func init() {
 
 func pgUpgrade(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface.Env.Save()
 	interfix := ""
-	if dev {
-		docker.SetDevMode()
+	if dockerInterface.UseDevInfra {
 		interfix = "local"
 	} else {
-		docker.SetProductionMode()
 		interfix = "production"
 	}
 

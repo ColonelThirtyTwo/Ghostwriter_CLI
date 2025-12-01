@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	env "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
-	"github.com/spf13/cobra"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 // Vars for global flags
@@ -27,9 +27,6 @@ func Execute() {
 }
 
 func init() {
-	// Create or parse the Docker ``.env`` file
-	env.ParseGhostwriterEnvironmentVariables()
-
 	// Persistent flags defined here are global for the CLI
 	rootCmd.PersistentFlags().BoolVar(&dev, "dev", false, `Target the development environment for "install" and "containers" commands.`)
 }

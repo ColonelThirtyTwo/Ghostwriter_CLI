@@ -37,10 +37,14 @@ type DockerInterface struct {
 	Dir string
 	// Docker compose file to use
 	ComposeFile string
+	// Use development image names and environment settings instead of production ones
+	UseDevInfra bool
 	// Command to use, either docker or podman
 	command string
 	// Daemon client, lazily initialized
 	client *client.Client
+	// Docker environmental variables
+	Env *GWEnvironment
 }
 
 func GetDockerInterface(dev bool) *DockerInterface {
@@ -97,10 +101,24 @@ func GetDockerInterface(dev bool) *DockerInterface {
 		log.Fatalln("Ghostwriter CLI must be run in the same directory as the `local.yml` and `production.yml` files")
 	}
 
+	env, err := ReadEnv(dir)
+	if err != nil {
+		log.Fatalf("Could not load environment file: %s\n", err)
+	}
+
+	if dev {
+		env.SetDev()
+	} else {
+		env.SetProd()
+	}
+
 	return &DockerInterface{
 		Dir:         dir,
 		ComposeFile: file,
+		UseDevInfra: dev,
 		command:     dockerCmd,
+		client:      nil,
+		Env:         env,
 	}
 }
 

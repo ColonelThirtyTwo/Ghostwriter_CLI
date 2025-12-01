@@ -33,12 +33,11 @@ func init() {
 
 func installGhostwriter(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface.Env.Save()
 	if dev {
 		fmt.Println("[+] Starting development environment installation")
-		docker.SetDevMode()
 	} else {
 		fmt.Println("[+] Starting production environment installation")
-		docker.SetProductionMode()
 		docker.GenerateCertificatePackage()
 	}
 
@@ -74,6 +73,6 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 		fmt.Printf("[-] Error trying to restart the `graphql_engine` service: %v\n", restartErr)
 	}
 	fmt.Println("[+] Ghostwriter is ready to go!")
-	fmt.Printf("[+] You can login as `%s` with this password: %s\n", docker.GhostEnv.GetString("django_superuser_username"), docker.GhostEnv.GetString("django_superuser_password"))
+	fmt.Printf("[+] You can login as `%s` with this password: %s\n", dockerInterface.Env.Get("django_superuser_username"), dockerInterface.Env.Get("django_superuser_password"))
 	fmt.Println("[+] You can get your admin password by running: ghostwriter-cli config get admin_password")
 }

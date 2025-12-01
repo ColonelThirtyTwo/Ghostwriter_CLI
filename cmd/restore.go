@@ -52,11 +52,7 @@ func restoreDatabase(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if dev {
-		internal.SetDevMode()
-	} else {
-		internal.SetProductionMode()
-	}
+	dockerInterface.Env.Save()
 
 	fmt.Printf("[+] Restoring the `%s` database backup file...\n", args[0])
 	restore(dockerInterface, args[0])
@@ -82,7 +78,7 @@ func restore(dockerInterface *docker.DockerInterface, restore string) {
 func mediaRestore(dockerInterface *docker.DockerInterface, restore string) {
 	// Determine the volume names based on the environment
 	var dataVolume, backupVolume string
-	if dockerInterface.ComposeFile == "local.yml" {
+	if dockerInterface.UseDevInfra {
 		dataVolume = "ghostwriter_local_data"
 		backupVolume = "ghostwriter_local_postgres_data_backups"
 	} else {

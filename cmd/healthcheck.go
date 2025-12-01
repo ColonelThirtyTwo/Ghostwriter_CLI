@@ -150,7 +150,7 @@ func checkGhostwriterHealth(dockerInterface *docker.DockerInterface) (HealthIssu
 
 	protocol := "https"
 	port := "443"
-	if dockerInterface.ComposeFile == "local.yml" {
+	if dockerInterface.UseDevInfra {
 		protocol = "http"
 		port = "8000"
 	}

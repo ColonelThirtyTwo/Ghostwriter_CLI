@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+
 	env "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
+	internal "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +23,11 @@ func init() {
 }
 
 func configDisallowHost(cmd *cobra.Command, args []string) {
-	env.DisallowHost(args[0])
+	env, err := env.ReadEnv(internal.GetCwdFromExe())
+	if err != nil {
+		log.Fatalf("Could not read environment file: %s\n", err)
+	}
+	env.RemoveHost("django_allowed_hosts", args[0])
+	env.Save()
 	fmt.Println("[+] Configuration successfully updated. Bring containers down and up for changes to take effect.")
 }

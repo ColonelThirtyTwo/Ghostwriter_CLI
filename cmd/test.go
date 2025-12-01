@@ -24,16 +24,17 @@ func init() {
 
 func runUnitTests(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface.Env.Save()
 	fmt.Println("[+] Running Ghostwriter's unit and integration tests...")
 
 	// Save the current env values we're about to change
-	currentActionSecret := docker.GhostEnv.Get("HASURA_GRAPHQL_ACTION_SECRET")
-	currentSettingsModule := docker.GhostEnv.Get("DJANGO_SETTINGS_MODULE")
+	currentActionSecret := dockerInterface.Env.Get("HASURA_GRAPHQL_ACTION_SECRET")
+	currentSettingsModule := dockerInterface.Env.Get("DJANGO_SETTINGS_MODULE")
 
 	// Change env values for the test conditions
-	docker.GhostEnv.Set("HASURA_GRAPHQL_ACTION_SECRET", "changeme")
-	docker.GhostEnv.Set("DJANGO_SETTINGS_MODULE", "config.settings.local")
-	docker.WriteGhostwriterEnvironmentVariables()
+	dockerInterface.Env.Set("HASURA_GRAPHQL_ACTION_SECRET", "changeme")
+	dockerInterface.Env.Set("DJANGO_SETTINGS_MODULE", "config.settings.local")
+	dockerInterface.Env.Save()
 
 	// Run the unit tests
 	testErr := dockerInterface.RunDjangoManageCommand("test")
@@ -42,7 +43,7 @@ func runUnitTests(cmd *cobra.Command, args []string) {
 	}
 
 	// Reset the changed env values
-	docker.GhostEnv.Set("HASURA_GRAPHQL_ACTION_SECRET", currentActionSecret)
-	docker.GhostEnv.Set("DJANGO_SETTINGS_MODULE", currentSettingsModule)
-	docker.WriteGhostwriterEnvironmentVariables()
+	dockerInterface.Env.Set("HASURA_GRAPHQL_ACTION_SECRET", currentActionSecret)
+	dockerInterface.Env.Set("DJANGO_SETTINGS_MODULE", currentSettingsModule)
+	dockerInterface.Env.Save()
 }

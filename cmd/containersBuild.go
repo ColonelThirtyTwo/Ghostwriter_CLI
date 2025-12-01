@@ -36,13 +36,12 @@ func init() {
 
 func buildContainers(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
-	if dev {
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Starting development environment build")
-		docker.SetDevMode()
 	} else {
 		fmt.Println("[+] Starting production environment build")
-		docker.SetProductionMode()
 	}
+	dockerInterface.Env.Save()
 
 	downErr := dockerInterface.Down(false)
 	if downErr != nil {

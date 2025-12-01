@@ -26,13 +26,12 @@ func init() {
 
 func containersUp(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
-	if dev {
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Bringing up the development environment")
-		docker.SetDevMode()
 	} else {
 		fmt.Println("[+] Bringing up the production environment")
-		docker.SetProductionMode()
 	}
+	dockerInterface.Env.Save()
 	err := dockerInterface.Up()
 	if err != nil {
 		log.Fatalf("Error trying to bring up the containers with %s: %v\n", dockerInterface.ComposeFile, err)

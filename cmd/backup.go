@@ -34,12 +34,7 @@ func init() {
 
 func backupDatabase(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
-
-	if dev {
-		docker.SetDevMode()
-	} else {
-		docker.SetProductionMode()
-	}
+	dockerInterface.Env.Save()
 
 	if lst {
 		listBackups(dockerInterface)

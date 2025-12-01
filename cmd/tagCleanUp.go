@@ -30,12 +30,11 @@ func init() {
 
 func tagCleanUp(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface.Env.Save()
 	if dev {
 		fmt.Println("[+] Executing tag cleanup in the development environment...")
-		docker.SetDevMode()
 	} else {
 		fmt.Println("[+] Executing tag cleanup in the production environment...")
-		docker.SetProductionMode()
 	}
 
 	err := dockerInterface.RunDjangoManageCommand("deduplicate_tags")

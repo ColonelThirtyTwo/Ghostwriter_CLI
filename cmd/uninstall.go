@@ -35,11 +35,10 @@ func uninstallGhostwriter(cmd *cobra.Command, args []string) {
 	dockerInterface := docker.GetDockerInterface(dev)
 	if dev {
 		fmt.Println("[+] Starting Ghostwriter development environment removal")
-		docker.SetDevMode()
 	} else {
 		fmt.Println("[+] Starting Ghostwriter production environment removal")
-		docker.SetProductionMode()
 	}
+	dockerInterface.Env.Save()
 
 	c := docker.AskForConfirmation("[!] This command removes all containers, images, and volume data for the target environment. Are you sure you want to uninstall?")
 	if !c {
