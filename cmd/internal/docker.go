@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
@@ -45,6 +46,8 @@ type DockerInterface struct {
 	client *client.Client
 	// Docker environmental variables
 	Env *GWEnvironment
+	// Project name for the compose project, lazily initialized
+	composeProjectName string
 }
 
 func GetDockerInterface(dev bool) *DockerInterface {
@@ -113,12 +116,13 @@ func GetDockerInterface(dev bool) *DockerInterface {
 	}
 
 	return &DockerInterface{
-		Dir:         dir,
-		ComposeFile: file,
-		UseDevInfra: dev,
-		command:     dockerCmd,
-		client:      nil,
-		Env:         env,
+		Dir:                dir,
+		ComposeFile:        file,
+		UseDevInfra:        dev,
+		command:            dockerCmd,
+		client:             nil,
+		Env:                env,
+		composeProjectName: "",
 	}
 }
 
@@ -182,6 +186,32 @@ func (this DockerInterface) Down(volumes bool) error {
 		args = append(args, "--volumes")
 	}
 	return this.RunComposeCmd(args...)
+}
+
+// Gets the docker compose project name
+func (this DockerInterface) GetComposeProjectName() string {
+	if this.composeProjectName != "" {
+		return this.composeProjectName
+	}
+
+	out, err := this.RunCmdWithOutput("compose", "-f", this.ComposeFile, "config", "--format", "json")
+	if err != nil {
+		log.Fatalf("Could not get docker compose project info: %s\n", err)
+	}
+
+	path, err := yaml.PathString("$.name")
+	if err != nil {
+		log.Fatalf("Could not parse yaml path. This is a bug. %s\n", err)
+	}
+
+	var name string
+	err = path.Read(strings.NewReader(out), &name)
+	if err != nil {
+		log.Fatalf("Could not get docker compose project name: %s\n", err)
+	}
+
+	this.composeProjectName = name
+	return name
 }
 
 // Container is a custom type for storing container information similar to output from "docker containers ls".
@@ -282,15 +312,28 @@ func (this DockerInterface) FetchLogs(containerName string, lines string) []stri
 	return logs
 }
 
-// Determine if the container with the specified "name" label ("containerName" parameter) is running.
+// Determine if the container with the specified name is running
 func (this DockerInterface) IsServiceRunning(containerName string) bool {
-	containers := this.GetRunning()
-	for _, container := range containers {
-		if container.Name == strings.ToLower(containerName) {
-			return true
-		}
+	projectName := this.GetComposeProjectName()
+	name := fmt.Sprintf("%s-%s-1", projectName, containerName)
+
+	out, err := this.RunCmdWithOutput("inspect", "-f", "json", name)
+	if err != nil {
+		log.Fatalf("Could not get status of container %s: %s\n", name, err)
 	}
-	return false
+
+	path, err := yaml.PathString("$[0].State.Running")
+	if err != nil {
+		log.Fatalf("Could not parse yaml path. This is a bug. %s\n", err)
+	}
+
+	var running bool
+	err = path.Read(strings.NewReader(out), &running)
+	if err != nil {
+		log.Fatalf("Could not get status of %s: %s\n", name, err)
+	}
+
+	return running
 }
 
 // Determine if the Django application has completed startup based on
@@ -326,9 +369,9 @@ func (this DockerInterface) WaitForDjango() bool {
 	fmt.Println("[+] Waiting for Django application startup to complete...")
 	counter := 0
 	for {
-		if !this.IsServiceRunning("ghostwriter_django") {
+		if !this.IsServiceRunning("django") {
 			fmt.Print("\n")
-			log.Fatalf("Django container exited unexpectedly. Check the logs in docker for the ghostwriter_django container")
+			log.Fatalf("Django container exited unexpectedly. Check the logs in docker for the django container")
 		}
 		if this.IsDjangoStarted() {
 			fmt.Print("\n[+] Django application started\n")
