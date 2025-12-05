@@ -24,7 +24,7 @@ func init() {
 }
 
 func migrateTotp(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("Migrating TOTP secrets and migration codes from Ghostwriter <=v6 to v6.1+.\n")

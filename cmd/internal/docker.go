@@ -2,15 +2,19 @@ package internal
 
 import (
 	"context"
+	_ "embed"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -33,6 +37,38 @@ var (
 	}
 )
 
+//go:embed dockercompose.yml
+var dockercompose string
+
+// Run mode - specifies where to get dockerfiles and whether to run dev or prod
+type DockerMode string
+
+const (
+	// Use source in exe's directory in dev mode
+	ModeLocalDev DockerMode = "local-dev"
+	// Use source in exe's directory in prod mode
+	ModeLocalProd DockerMode = "local-prod"
+	// Download and manage dockerfiles and run in prod mode
+	ModeProd DockerMode = "prod"
+)
+
+var AllModes = []string{string(ModeLocalDev), string(ModeLocalProd), string(ModeProd)}
+
+// cobra pvalue.Value implementation for argument parsing
+func (e *DockerMode) String() string {
+	return string(*e)
+}
+func (e *DockerMode) Set(v string) error {
+	if !slices.Contains(AllModes, v) {
+		return errors.New("must be one of: " + strings.Join(AllModes, ", "))
+	}
+	*e = DockerMode(v)
+	return nil
+}
+func (e *DockerMode) Type() string {
+	return "DockerMode"
+}
+
 type DockerInterface struct {
 	// Directory that docker compose file resides in
 	Dir string
@@ -46,11 +82,29 @@ type DockerInterface struct {
 	client *client.Client
 	// Docker environmental variables
 	Env *GWEnvironment
-	// Project name for the compose project, lazily initialized
+	// Compose project name, lazily fetched
 	composeProjectName string
 }
 
-func GetDockerInterface(dev bool) *DockerInterface {
+// Gets the directory that the docker-compose and other files are in, depending on the run mode
+func GetDockerDirFromMode(mode DockerMode) string {
+	if mode == ModeProd {
+		dir, err := xdg.DataFile("ghostwriter/prod.yml")
+		if err != nil {
+			log.Fatalf("Could not get data directory: %s\n", err)
+		}
+		dir = filepath.Dir(dir)
+		err = os.Mkdir(dir, 0666)
+		if err != nil && !errors.Is(err, os.ErrExist) {
+			log.Fatalf("Could not create directory %s: %s\n", dir, err)
+		}
+		return dir
+	}
+	return GetCwdFromExe()
+}
+
+// Gets the docker interface, checking how to run docker/podman, etc
+func GetDockerInterface(mode DockerMode) *DockerInterface {
 	fmt.Println("[+] Checking the status of Docker and the Compose plugin...")
 	// Check for ``docker`` first because it's required for everything to come
 	dockerExists := CheckPath("docker")
@@ -89,19 +143,29 @@ func GetDockerInterface(dev bool) *DockerInterface {
 		}
 	}
 
-	dir := GetCwdFromExe()
+	dir := GetDockerDirFromMode(mode)
 
-	file := ""
-	if dev {
+	var file string
+	switch mode {
+	case ModeLocalDev:
 		file = "local.yml"
-	} else {
+	case ModeLocalProd:
 		file = "production.yml"
+	case ModeProd:
+		file = "docker-compose.yml"
+
+		err := os.WriteFile(filepath.Join(dir, file), []byte(dockercompose), 0666)
+		if err != nil {
+			log.Fatalf("Could not write docker-compose.yml file: %s\n", err)
+		}
+	default:
+		panic("Unrecognized mode - this is a bug")
 	}
 
-	// Bail out if we're not in the same directory as the YAML files
+	// Bail out if a compose file isn't available.
 	// Otherwise, we'll get a confusing error message from the `compose` plugin
 	if !FileExists(filepath.Join(dir, file)) {
-		log.Fatalln("Ghostwriter CLI must be run in the same directory as the `local.yml` and `production.yml` files")
+		log.Fatalf("Ghostwriter CLI must be run in the same directory as the %s file", file)
 	}
 
 	env, err := ReadEnv(dir)
@@ -109,7 +173,7 @@ func GetDockerInterface(dev bool) *DockerInterface {
 		log.Fatalf("Could not load environment file: %s\n", err)
 	}
 
-	if dev {
+	if mode == ModeLocalDev {
 		env.SetDev()
 	} else {
 		env.SetProd()
@@ -118,7 +182,7 @@ func GetDockerInterface(dev bool) *DockerInterface {
 	return &DockerInterface{
 		Dir:                dir,
 		ComposeFile:        file,
-		UseDevInfra:        dev,
+		UseDevInfra:        mode == ModeLocalDev,
 		command:            dockerCmd,
 		client:             nil,
 		Env:                env,
@@ -172,13 +236,13 @@ func (this DockerInterface) RunComposeCmd(args ...string) error {
 	return this.RunCmd(args...)
 }
 
-// / Bring all containers up
+// Bring all containers up
 func (this DockerInterface) Up() error {
 	fmt.Printf("[+] Running `%s` to bring up the containers with %s...\n", this.command, this.ComposeFile)
 	return this.RunComposeCmd("up", "-d")
 }
 
-// / Take down all containers
+// Take down all containers
 func (this DockerInterface) Down(volumes bool) error {
 	fmt.Printf("[+] Running `%s` to take down the containers with %s...\n", this.command, this.ComposeFile)
 	args := []string{"down"}
@@ -241,7 +305,7 @@ func (c Containers) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// Gets a list of all running containers
+// Gets a list of all running docker containers (including outside of this project)
 func (this DockerInterface) GetRunning() Containers {
 	var running Containers
 

@@ -25,7 +25,7 @@ func init() {
 }
 
 func containersUp(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Bringing up the development environment")
 	} else {

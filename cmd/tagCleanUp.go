@@ -29,9 +29,9 @@ func init() {
 }
 
 func tagCleanUp(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
-	if dev {
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Executing tag cleanup in the development environment...")
 	} else {
 		fmt.Println("[+] Executing tag cleanup in the production environment...")

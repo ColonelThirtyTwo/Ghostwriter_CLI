@@ -8,12 +8,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"github.com/Luzifer/go-dhparam"
 	"log"
 	"math/big"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Luzifer/go-dhparam"
 )
 
 const (
@@ -77,9 +78,9 @@ func checkCerts(certPath string, keyPath string) error {
 }
 
 // Generate the TLS certificates and Diffie-Helman parameters file using Go.
-func generateCertificates() error {
-	certPath := filepath.Join(GetCwdFromExe(), "ssl", "ghostwriter.crt")
-	keyPath := filepath.Join(GetCwdFromExe(), "ssl", "ghostwriter.key")
+func generateCertificates(path string) error {
+	certPath := filepath.Join(path, "ssl", "ghostwriter.crt")
+	keyPath := filepath.Join(path, "ssl", "ghostwriter.key")
 	if checkCerts(certPath, keyPath) == nil {
 		fmt.Printf("[!] Found existing certificate files, so new ones will not be generated...\n")
 		fmt.Printf("[*] Rename or delete ssl/ghostwriter.key and ssl/ghostwriter.key if you want to replace these keys")
@@ -157,9 +158,9 @@ func generateCertificates() error {
 }
 
 // GenerateCertificatePackage generate TLS certificates and Diffie-Helman parameters file using Go.
-func GenerateCertificatePackage() error {
+func GenerateCertificatePackage(path string) error {
 	// Ensure the ``ssl`` directory exists to receive the keys
-	sslPath := filepath.Join(GetCwdFromExe(), "ssl")
+	sslPath := filepath.Join(path, "ssl")
 	if !DirExists(sslPath) {
 		err := os.MkdirAll(sslPath, os.ModePerm)
 		if err != nil {
@@ -169,7 +170,7 @@ func GenerateCertificatePackage() error {
 	}
 
 	fmt.Println("[*] Generating new `ghostwriter.crt` and `ghostwriter.key` files")
-	certErr := generateCertificates()
+	certErr := generateCertificates(path)
 	if certErr != nil {
 		fmt.Printf("[!] Failed to generate TLS/SSL certificate files: %s\n", certErr)
 	}

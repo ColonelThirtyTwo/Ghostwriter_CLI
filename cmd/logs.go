@@ -34,7 +34,7 @@ func init() {
 }
 
 func readLogs(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	lines := cmd.Flag("lines").Value.String()
 	fmt.Printf("[+] Fetching up to %s lines of logs for `%s`...\n", lines, args[0])
 	logs := dockerInterface.FetchLogs(args[0], lines)

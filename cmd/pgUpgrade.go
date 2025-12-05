@@ -30,7 +30,7 @@ func init() {
 }
 
 func pgUpgrade(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
 	interfix := ""
 	if dockerInterface.UseDevInfra {

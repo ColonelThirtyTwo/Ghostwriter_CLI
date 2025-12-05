@@ -29,8 +29,8 @@ func init() {
 }
 
 func containersDown(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
-	if dev {
+	dockerInterface := docker.GetDockerInterface(mode)
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Bringing down the development environment")
 	} else {
 		fmt.Println("[+] Bringing down the production environment")

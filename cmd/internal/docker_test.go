@@ -22,7 +22,7 @@ func TestEvaluateDockerComposeStatus(t *testing.T) {
 	defer local.Close()
 	defer prod.Close()
 
-	GetDockerInterface(true)
+	GetDockerInterface(ModeLocalDev)
 }
 
 // Note: The media backup and restore functions (RunDockerComposeMediaBackup and RunDockerComposeMediaRestore)

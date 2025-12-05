@@ -26,7 +26,7 @@ func init() {
 }
 
 func displayRunning(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	// initialize tabwriter
 	writer := new(tabwriter.Writer)
 	// Set minwidth, tabwidth, padding, padchar, and flags

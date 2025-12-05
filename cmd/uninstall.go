@@ -32,8 +32,8 @@ func init() {
 }
 
 func uninstallGhostwriter(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
-	if dev {
+	dockerInterface := docker.GetDockerInterface(mode)
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Starting Ghostwriter development environment removal")
 	} else {
 		fmt.Println("[+] Starting Ghostwriter production environment removal")

@@ -23,7 +23,7 @@ func init() {
 }
 
 func runUnitTests(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
 	fmt.Println("[+] Running Ghostwriter's unit and integration tests...")
 

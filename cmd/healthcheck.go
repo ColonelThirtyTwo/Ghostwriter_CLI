@@ -35,7 +35,7 @@ func init() {
 }
 
 func runHealthcheck(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	// initialize tabwriter
 	writer := new(tabwriter.Writer)
 	// Set minwidth, tabwidth, padding, padchar, and flags
@@ -108,7 +108,7 @@ func checkDockerHealth(dockerInterface *docker.DockerInterface) (HealthIssues, e
 	var issues HealthIssues
 
 	requiredImages := docker.ProdImages
-	if dev {
+	if dockerInterface.UseDevInfra {
 		requiredImages = docker.DevImages
 	}
 

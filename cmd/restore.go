@@ -42,7 +42,7 @@ func init() {
 }
 
 func restoreDatabase(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	confirmMsg := "Do you really want to restore this backup file? This cannot be undone!"
 	if mediaBackupFile != "" {
 		confirmMsg = "Do you really want to restore the database and media backups? This cannot be undone!"

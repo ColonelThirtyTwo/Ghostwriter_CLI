@@ -32,46 +32,45 @@ func init() {
 }
 
 func installGhostwriter(cmd *cobra.Command, args []string) {
-	dockerInterface := docker.GetDockerInterface(dev)
+	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
-	if dev {
+	if dockerInterface.UseDevInfra {
 		fmt.Println("[+] Starting development environment installation")
 	} else {
 		fmt.Println("[+] Starting production environment installation")
-		docker.GenerateCertificatePackage()
+		docker.GenerateCertificatePackage(dockerInterface.Dir)
 	}
 
 	buildErr := dockerInterface.RunComposeCmd("build")
 	if buildErr != nil {
 		log.Fatalf("Error trying to build with %s: %v\n", dockerInterface.ComposeFile, buildErr)
 	}
-	upErr := dockerInterface.Up()
-	if upErr != nil {
-		log.Fatalf("Error trying to bring up environment with %s: %v\n", dockerInterface.ComposeFile, upErr)
+
+	fmt.Println("[+] Migrating database...")
+	err := dockerInterface.RunDjangoManageCommand("migrate")
+	if err != nil {
+		log.Fatalf("Error migrating database: %s\n", err)
 	}
-	// Must wait for Django to complete db migrations before seeding the database
-	for {
-		if dockerInterface.WaitForDjango() {
-			fmt.Println("[+] Proceeding with Django database setup...")
-			seedErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "/seed_data")
-			if seedErr != nil {
-				log.Fatalf("Error trying to seed the database: %v\n", seedErr)
-			}
-			fmt.Println("[+] Proceeding with Django superuser creation...")
-			userErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "python", "manage.py", "createsuperuser", "--noinput", "--role", "admin")
-			// This may fail if the user has already created a superuser, so we don't exit
-			if userErr != nil {
-				log.Printf("Error trying to create a superuser: %v\n", userErr)
-				log.Println("Error may occur if you've run `install` before or made a superuser manually")
-			}
-			break
-		}
+
+	fmt.Println("[+] Proceeding with Django database setup...")
+	seedErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "/seed_data")
+	if seedErr != nil {
+		log.Fatalf("Error trying to seed the database: %v\n", seedErr)
 	}
-	// Restart Hasura to ensure metadata matches post-migrations and seeding
-	restartErr := dockerInterface.RunComposeCmd("restart", "graphql_engine")
-	if restartErr != nil {
-		fmt.Printf("[-] Error trying to restart the `graphql_engine` service: %v\n", restartErr)
+	fmt.Println("[+] Proceeding with Django superuser creation...")
+	userErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "python", "manage.py", "createsuperuser", "--noinput", "--role", "admin")
+	// This may fail if the user has already created a superuser, so we don't exit
+	if userErr != nil {
+		log.Printf("Error trying to create a superuser: %v\n", userErr)
+		log.Println("Error may occur if you've run `install` before or made a superuser manually")
 	}
+
+	fmt.Println("[+] Starting containers...")
+	err = dockerInterface.Up()
+	if err != nil {
+		log.Fatalf("Error bringing containers up: %s\n", err)
+	}
+
 	fmt.Println("[+] Ghostwriter is ready to go!")
 	fmt.Printf("[+] You can login as `%s` with this password: %s\n", dockerInterface.Env.Get("django_superuser_username"), dockerInterface.Env.Get("django_superuser_password"))
 	fmt.Println("[+] You can get your admin password by running: ghostwriter-cli config get admin_password")

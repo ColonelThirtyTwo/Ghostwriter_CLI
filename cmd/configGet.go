@@ -35,7 +35,7 @@ func configGet(cmd *cobra.Command, args []string) {
 
 	defer writer.Flush()
 
-	env, err := env.ReadEnv(internal.GetCwdFromExe())
+	env, err := env.ReadEnv(internal.GetDockerDirFromMode(mode))
 	if err != nil {
 		log.Fatalf("Could not read environment file: %s\n", err)
 	}
