@@ -459,7 +459,7 @@ func (this DockerInterface) WaitForDjango() bool {
 
 // Runs the django manage.py script, with the specified arguments
 func (this DockerInterface) RunDjangoManageCommand(args ...string) error {
-	args = append([]string{"run", "django", "python", "manage.py"}, args...)
+	args = append([]string{"run", "--rm", "django", "python", "manage.py"}, args...)
 	return this.RunComposeCmd(args...)
 }
 
