@@ -41,7 +41,7 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 		docker.GenerateCertificatePackage(dockerInterface.Dir)
 	}
 
-	buildErr := dockerInterface.RunComposeCmd("build")
+	buildErr := dockerInterface.RunComposeCmd("build", "--pull")
 	if buildErr != nil {
 		log.Fatalf("Error trying to build with %s: %v\n", dockerInterface.ComposeFile, buildErr)
 	}
