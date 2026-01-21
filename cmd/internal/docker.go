@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -471,4 +472,29 @@ func (this DockerInterface) GetDaemonClient() (*client.Client, error) {
 	client, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	this.client = client
 	return this.client, err
+}
+
+// Gets the currently installed version of Ghostwriter
+func (this DockerInterface) GetVersion() string {
+	if this.ManageComposeFile {
+		// get the version embedded in the compose file
+		out, err := this.RunCmdWithOutput("compose", "-f", this.ComposeFile, "config", "--images")
+		if err != nil {
+			log.Fatalf("Error running compose: %v\n", err)
+		}
+		re := regexp.MustCompile(`^[^\:]+:([^\n]+)`)
+		captures := re.FindStringSubmatch(out)
+		if captures == nil || len(captures) < 2 {
+			log.Fatalf("Could not parse images from compose file")
+		}
+		return captures[1]
+	} else {
+		// get the version in the source tree's VERSION file
+		versionFileBytes, err := os.ReadFile(filepath.Join(this.Dir, "VERSION"))
+		if err != nil {
+			log.Fatalf("Error reading VERSION file: %v\n", err)
+		}
+		versionFile := string(versionFileBytes)
+		return strings.Split(versionFile, "\n")[0]
+	}
 }
