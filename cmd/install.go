@@ -2,7 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"path/filepath"
 
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
@@ -11,27 +15,76 @@ import (
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Builds containers and performs first-time setup of Ghostwriter",
-	Long: `Builds containers and performs first-time setup of Ghostwriter. A production
-environment is installed by default. Use the "--dev" flag to install a development environment.
+	Short: "Installs/updates and sets up Ghostwriter",
+	Long: `Installs/updates and sets up Ghostwriter. By default, Ghostwriter will download and
+install the latest version to an application data directory - use the "--mode" option to use a
+source checkout instead.
 
 The command performs the following steps:
 
 * Sets up the default server configuration
 * Generates TLS certificates for the server
-* Builds the Docker containers
+* Fetches or builds the Docker containers
 * Creates a default admin user with a randomly generated password
 
-This command only needs to be run once. If you run it again, you will see some errors because
-certain actions (e.g., creating the default user) can and should only be done once.`,
+Running after initial installation will keep the existing configuration but fetch a new version
+(for --mode=production) or rebuild the containers (for --mode=local-*)
+`,
 	Run: installGhostwriter,
 }
 
+var installVersion string
+
 func init() {
+	installCmd.PersistentFlags().StringVar(
+		&installVersion,
+		"version",
+		"",
+		"Version to install. Defaults to latest. Ignored for --mode=local-*. NOTE: downgrading is not supported.",
+	)
 	rootCmd.AddCommand(installCmd)
 }
 
 func installGhostwriter(cmd *cobra.Command, args []string) {
+	if mode == docker.ModeProd {
+		// Fetch (new) docker compose file before initializing the interface
+		dir := docker.GetDockerDirFromMode(mode)
+		file := "docker-compose.yml"
+
+		fmt.Println("[+] Downloading docker-compose.yml")
+
+		var url string
+		if installVersion == "" {
+			url = "https://github.com/ColonelThirtyTwo/Ghostwriter/releases/latest/download/gw-cli.yml"
+		} else {
+			url = "https://github.com/ColonelThirtyTwo/Ghostwriter/releases/download/" + installVersion + "/gw-cli.yml"
+		}
+
+		res, err := http.Get(url)
+		if err != nil {
+			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
+		}
+		if res.StatusCode != 200 {
+			log.Fatalf("Error trying to download gw-cli.yml from GitHub: HTTP status code %s", res.StatusCode)
+		}
+
+		buf, err := io.ReadAll(res.Body)
+		if err != nil {
+			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
+		}
+
+		err = os.WriteFile(
+			filepath.Join(dir, file),
+			buf,
+			0644,
+		)
+
+		if err != nil {
+			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
+		}
+	}
+
+	// Get interface
 	dockerInterface := docker.GetDockerInterface(mode)
 	dockerInterface.Env.Save()
 	if dockerInterface.UseDevInfra {
@@ -41,13 +94,24 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 		docker.GenerateCertificatePackage(dockerInterface.Dir)
 	}
 
-	buildErr := dockerInterface.RunComposeCmd("build", "--pull")
-	if buildErr != nil {
-		log.Fatalf("Error trying to build with %s: %v\n", dockerInterface.ComposeFile, buildErr)
+	// Build/pull
+	var err error
+	if dockerInterface.ManageComposeFile {
+		fmt.Println("[+] Pulling containers...")
+		err = dockerInterface.RunComposeCmd("pull")
+		if err != nil {
+			log.Fatalf("Error trying to pull with %s: %v\n", dockerInterface.ComposeFile, err)
+		}
+	} else {
+		fmt.Println("[+] Building containers...")
+		err = dockerInterface.RunComposeCmd("build", "--pull")
+		if err != nil {
+			log.Fatalf("Error trying to BUILD with %s: %v\n", dockerInterface.ComposeFile, err)
+		}
 	}
 
 	fmt.Println("[+] Migrating database...")
-	err := dockerInterface.RunDjangoManageCommand("migrate")
+	err = dockerInterface.RunDjangoManageCommand("migrate")
 	if err != nil {
 		log.Fatalf("Error migrating database: %s\n", err)
 	}
@@ -58,7 +122,7 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 		log.Fatalf("Error trying to seed the database: %v\n", seedErr)
 	}
 	fmt.Println("[+] Proceeding with Django superuser creation...")
-	userErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "python", "manage.py", "createsuperuser", "--noinput", "--role", "admin")
+	userErr := dockerInterface.RunDjangoManageCommand("createsuperuser", "--noinput", "--role", "admin")
 	// This may fail if the user has already created a superuser, so we don't exit
 	if userErr != nil {
 		log.Printf("Error trying to create a superuser: %v\n", userErr)

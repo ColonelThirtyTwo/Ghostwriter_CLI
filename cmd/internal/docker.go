@@ -37,9 +37,6 @@ var (
 	}
 )
 
-//go:embed dockercompose.yml
-var dockercompose string
-
 // Run mode - specifies where to get dockerfiles and whether to run dev or prod
 type DockerMode string
 
@@ -72,10 +69,12 @@ func (e *DockerMode) Type() string {
 type DockerInterface struct {
 	// Directory that docker compose file resides in
 	Dir string
-	// Docker compose file to use
+	// Docker compose filename to use, without directory
 	ComposeFile string
 	// Use development image names and environment settings instead of production ones
 	UseDevInfra bool
+	// Whether GW-CLI should download and write the compose file
+	ManageComposeFile bool
 	// Command to use, either docker or podman
 	command string
 	// Daemon client, lazily initialized
@@ -153,11 +152,6 @@ func GetDockerInterface(mode DockerMode) *DockerInterface {
 		file = "production.yml"
 	case ModeProd:
 		file = "docker-compose.yml"
-
-		err := os.WriteFile(filepath.Join(dir, file), []byte(dockercompose), 0666)
-		if err != nil {
-			log.Fatalf("Could not write docker-compose.yml file: %s\n", err)
-		}
 	default:
 		panic("Unrecognized mode - this is a bug")
 	}
@@ -165,7 +159,11 @@ func GetDockerInterface(mode DockerMode) *DockerInterface {
 	// Bail out if a compose file isn't available.
 	// Otherwise, we'll get a confusing error message from the `compose` plugin
 	if !FileExists(filepath.Join(dir, file)) {
-		log.Fatalf("Ghostwriter CLI must be run in the same directory as the %s file", file)
+		if mode == ModeProd {
+			log.Fatalf("Ghostwriter is not installed - please run the `install` command first.")
+		} else {
+			log.Fatalf("Ghostwriter CLI must be run in the same directory as the %s file", file)
+		}
 	}
 
 	env, err := ReadEnv(dir)
@@ -183,6 +181,7 @@ func GetDockerInterface(mode DockerMode) *DockerInterface {
 		Dir:                dir,
 		ComposeFile:        file,
 		UseDevInfra:        mode == ModeLocalDev,
+		ManageComposeFile:  mode == ModeProd,
 		command:            dockerCmd,
 		client:             nil,
 		Env:                env,
