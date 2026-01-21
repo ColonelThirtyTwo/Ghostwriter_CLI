@@ -13,7 +13,7 @@ var containersBuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Builds the Ghostwriter containers (only needed for updates)",
 	Long: `Builds the Ghostwriter containers. Production containers are built by
-default. Use the "--dev" flag to build a development environment.
+default. Use the "--mode" argument to build a development environment.
 
 Note: Build will stop a container if it is already running. You will need to run
 the "up" command to start the containers after the build.

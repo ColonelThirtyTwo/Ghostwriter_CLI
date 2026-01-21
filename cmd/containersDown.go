@@ -17,7 +17,7 @@ var containersDownCmd = &cobra.Command{
 	Long: `Bring down all Ghostwriter services and remove the containers. This
 performs the equivalent of running the "docker compose down" command.
 
-Production containers are targeted by default. Use the "--dev" flag to
+Production containers are targeted by default. Use the "--mode" argument to
 target development containers`,
 	Run: containersDown,
 }

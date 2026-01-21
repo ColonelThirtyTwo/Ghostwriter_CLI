@@ -15,7 +15,7 @@ var containersUpCmd = &cobra.Command{
 	Long: `Build, (re)create, and start all Ghostwriter containers. This
 performs the equivalent of running the "docker compose up" command.
 
-Production containers are targeted by default. Use the "--dev" flag to
+Production containers are targeted by default. Use the "--mode" argument to
 target development containers`,
 	Run: containersUp,
 }

@@ -19,8 +19,9 @@ import (
 var pgUpgradeCmd = &cobra.Command{
 	Use:   "pg-upgrade",
 	Short: "Upgrades the PostgreSQL database",
-	Long: `Upgrades the PostgreSQL version. A production
-environment is installed by default. Use the "--dev" flag to install a development environment.
+	Long: `Upgrades the PostgreSQL version.
+
+The production environment is targeted by default. Use the "--mode" argument to upgrade a development environment.
 `,
 	Run: pgUpgrade,
 }

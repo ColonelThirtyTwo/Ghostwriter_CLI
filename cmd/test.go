@@ -14,7 +14,7 @@ var testCmd = &cobra.Command{
 	Short: "Runs Ghostwriter's unit tests in the development environment",
 	Long: `Runs Ghostwriter's unit tests in the development environment.
 
-Requires to "install --dev" to have been run first.`,
+Requires to "install --mode=local-dev" to have been run first.`,
 	Run: runUnitTests,
 }
 

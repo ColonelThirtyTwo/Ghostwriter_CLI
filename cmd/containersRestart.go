@@ -15,7 +15,7 @@ var containersRestartCmd = &cobra.Command{
 	Long: `Restart all stopped and running Ghostwriter services. This performs
 the equivalent of running the "docker compose restart" command.
 
-Production containers are targeted by default. Use the "--dev" flag to
+Production containers are targeted by default. Use the "--mode" argument to
 target development containers`,
 	Run: containersRestart,
 }

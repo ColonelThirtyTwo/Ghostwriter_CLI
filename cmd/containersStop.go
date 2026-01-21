@@ -15,7 +15,7 @@ var containersStopCmd = &cobra.Command{
 	Long: `Stop all Ghostwriter services without removing the containers. This
 performs the equivalent of running the "docker compose stop" command.
 
-Production containers are targeted by default. Use the "--dev" flag to
+Production containers are targeted by default. Use the "--mode" argument to
 target development containers`,
 	Run: containersStop,
 }
