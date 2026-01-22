@@ -48,14 +48,14 @@ func readLastVersionCheck(file string) int64 {
 	lastDateBytes, err := os.ReadFile(file)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			fmt.Printf("[!] Could not read %s file: %w\n", file, err)
+			fmt.Printf("[!] Could not read %s file: %v\n", file, err)
 		}
 		return 0
 	}
 	lastDateText := string(lastDateBytes)
 	lastDate, err := strconv.ParseInt(lastDateText, 10, 64)
 	if err != nil {
-		fmt.Printf("[!] Could not read %s file: %w\n", file, err)
+		fmt.Printf("[!] Could not read %s file: %v\n", file, err)
 		return 0
 	}
 	return lastDate
@@ -76,17 +76,17 @@ func CheckLatestVersionNag(docker *DockerInterface) {
 
 	err := os.WriteFile(lastCheckFile, []byte(strconv.FormatInt(now, 10)), 0666)
 	if err != nil {
-		fmt.Printf("[!] Could not write %s: %w", lastCheckFile, err)
+		fmt.Printf("[!] Could not write %s: %v", lastCheckFile, err)
 	}
 
 	localVersion, err := docker.GetVersion()
 	if err != nil {
-		fmt.Printf("[!] Could not get local version: %w\n", err)
+		fmt.Printf("[!] Could not get local version: %v\n", err)
 		return
 	}
 	remoteVersion, err := FetchLatestRelease()
 	if err != nil {
-		fmt.Printf("[!] Could not get latest released version: %w\n", err)
+		fmt.Printf("[!] Could not get latest released version: %v\n", err)
 		return
 	}
 

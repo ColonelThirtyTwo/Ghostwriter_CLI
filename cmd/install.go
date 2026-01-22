@@ -65,7 +65,7 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
 		}
 		if res.StatusCode != 200 {
-			log.Fatalf("Error trying to download gw-cli.yml from GitHub: HTTP status code %s", res.StatusCode)
+			log.Fatalf("Error trying to download gw-cli.yml from GitHub: HTTP status code %d", res.StatusCode)
 		}
 
 		buf, err := io.ReadAll(res.Body)
