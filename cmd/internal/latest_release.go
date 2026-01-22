@@ -62,6 +62,10 @@ func readLastVersionCheck(file string) int64 {
 }
 
 func CheckLatestVersionNag(docker *DockerInterface) {
+	if !docker.Env.env.GetBool("gwcli_auto_check_updates") {
+		return
+	}
+
 	lastCheckFile := filepath.Join(docker.Dir, ".gwcli-last-update-check")
 	lastCheckTime := readLastVersionCheck(lastCheckFile)
 	now := time.Now().Unix()

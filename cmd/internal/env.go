@@ -151,6 +151,9 @@ type Configuration struct {
 // Set sane defaults for a basic Ghostwriter deployment.
 // Defaults are geared towards a development environment.
 func setDefaultConfigValues(env *viper.Viper) {
+	// GW-CLI configuration
+	env.SetDefault("gwcli_auto_check_updates", true)
+
 	// Project configuration
 	env.SetDefault("use_docker", "yes")
 	env.SetDefault("ipythondir", "/app/.ipython")
