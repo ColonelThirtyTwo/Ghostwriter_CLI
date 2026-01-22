@@ -36,4 +36,6 @@ func containersUp(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalf("Error trying to bring up the containers with %s: %v\n", dockerInterface.ComposeFile, err)
 	}
+
+	docker.CheckLatestVersionNag(dockerInterface)
 }
