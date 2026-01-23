@@ -55,9 +55,9 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 
 		var url string
 		if installVersion == "" {
-			url = "https://github.com/ColonelThirtyTwo/Ghostwriter/releases/latest/download/gw-cli.yml"
+			url = "https://github.com/GhostManager/Ghostwriter/releases/latest/download/gw-cli.yml"
 		} else {
-			url = "https://github.com/ColonelThirtyTwo/Ghostwriter/releases/download/" + installVersion + "/gw-cli.yml"
+			url = "https://github.com/GhostManager/Ghostwriter/releases/download/" + installVersion + "/gw-cli.yml"
 		}
 
 		res, err := http.Get(url)
