@@ -63,7 +63,13 @@ func compareCliVersions(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(writer, "Download the latest version of Ghostwriter CLI at:\t%s\n", htmlUrl)
 	}
 	if dockerLatestVersion != dockerCurrentVersion {
-		fmt.Fprintf(writer, "Install the latest version of Ghostwriter using the `install` subcommand\n")
+		fmt.Fprintf(writer, "Install the latest version of Ghostwriter using the `update` subcommand\n")
+	}
+
+	writer.Flush()
+
+	if dockerCurrentVersion == "latest" {
+		fmt.Println("[!] Using the `latest` tag is not recommended - pulling containers will not apply necessary changes to the docker-compose.yml file")
 	}
 
 	return nil
