@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/GhostManager/Ghostwriter_CLI/cmd/config"
-	utils "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
-	"github.com/spf13/cobra"
 	"os"
 	"text/tabwriter"
+
+	"github.com/GhostManager/Ghostwriter_CLI/cmd/config"
+	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
+	utils "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
+	"github.com/spf13/cobra"
 )
 
 // versionCmd represents the version command
@@ -33,18 +35,36 @@ func compareCliVersions(cmd *cobra.Command, args []string) error {
 	fmt.Println("[+] Fetching latest version information:")
 
 	if len(config.BuildDate) == 0 {
-		fmt.Fprintf(writer, "\nLocal Version\tGhostwriter CLI %s", config.Version)
+		fmt.Fprintf(writer, "Ghostwriter CLI\tLocal Version\t%s\n", config.Version)
 	} else {
-		fmt.Fprintf(writer, "\nLocal Version\tGhostwriter CLI %s (%s)", config.Version, config.BuildDate)
+		fmt.Fprintf(writer, "Ghostwriter CLI\tLocal Version\t%s (%s)\n", config.Version, config.BuildDate)
 	}
 
-	remoteVersion, htmlUrl, remoteErr := utils.GetRemoteVersion("GhostManager", "Ghostwriter_CLI")
-	if remoteErr != nil {
-		return remoteErr
+	dockerInterface := docker.GetDockerInterface(mode)
+	dockerCurrentVersion, err := dockerInterface.GetVersion()
+	if err != nil {
+		return err
 	}
+	fmt.Fprintf(writer, "GhostWriter\tLocal Version\t%s\n", dockerCurrentVersion)
 
-	fmt.Fprintf(writer, "\nLatest Release\t%s\n", remoteVersion)
-	fmt.Fprintf(writer, "Latest Download URL\t%s\n", htmlUrl)
+	gwcliLatestVersion, htmlUrl, err := utils.GetRemoteVersion("GhostManager", "Ghostwriter_CLI")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(writer, "Ghostwriter CLI\tLatest Release\t%s\n", gwcliLatestVersion)
+
+	dockerLatestVersion, _, err := utils.GetRemoteVersion("GhostManager", "Ghostwriter")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(writer, "Ghostwriter\tLatest Release\t%s\n", dockerLatestVersion)
+
+	if gwcliLatestVersion != config.Version {
+		fmt.Fprintf(writer, "Download the latest version of Ghostwriter CLI at:\t%s\n", htmlUrl)
+	}
+	if dockerLatestVersion != dockerCurrentVersion {
+		fmt.Fprintf(writer, "Install the latest version of Ghostwriter using the `install` subcommand\n")
+	}
 
 	return nil
 }

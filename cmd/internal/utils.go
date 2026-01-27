@@ -89,8 +89,6 @@ func GetLocalGhostwriterVersion() (string, error) {
 
 // GetRemoteVersion fetches the latest version information from GitHub's API for the given repository.
 func GetRemoteVersion(owner string, repository string) (string, string, error) {
-	var output string
-
 	baseUrl := "https://api.github.com/repos/" + owner + "/" + repository + "/releases/latest"
 	client := http.Client{Timeout: time.Second * 10}
 	resp, err := client.Get(baseUrl)
@@ -114,42 +112,9 @@ func GetRemoteVersion(owner string, repository string) (string, string, error) {
 		return "", "", jsonErr
 	}
 
-	publishedAtRaw, ok := githubJson["published_at"]
-	if !ok {
-		return "", "", fmt.Errorf("missing 'published_at' in GitHub response")
-	}
-	publishedAt, ok := publishedAtRaw.(string)
-	if !ok {
-		return "", "", fmt.Errorf("'published_at' is not a string")
-	}
-	date, parseErr := time.Parse(time.RFC3339, publishedAt)
-	if parseErr != nil {
-		output = fmt.Sprintf("%s (published at: %s)", repository, publishedAt)
-	} else {
-		tagNameRaw, ok := githubJson["tag_name"]
-		if !ok {
-			return "", "", fmt.Errorf("missing 'tag_name' in GitHub response")
-		}
-		tagName, ok := tagNameRaw.(string)
-		if !ok {
-			return "", "", fmt.Errorf("'tag_name' is not a string")
-		}
-		formatted := date.Format("02 Jan 2006")
-		output = fmt.Sprintf(
-			"%s %s (%s)",
-			repository, tagName, formatted,
-		)
-	}
-
-	urlRaw, ok := githubJson["html_url"]
-	if !ok {
-		return "", "", fmt.Errorf("missing 'html_url' in GitHub response")
-	}
-	url, ok := urlRaw.(string)
-	if !ok {
-		return "", "", fmt.Errorf("'html_url' is not a string")
-	}
-	return output, url, nil
+	tagName := githubJson["tag_name"].(string)
+	url := githubJson["html_url"].(string)
+	return tagName, url, nil
 }
 
 // Contains checks if a slice of strings ("slice" parameter) contains a given
