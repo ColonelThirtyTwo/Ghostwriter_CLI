@@ -45,7 +45,7 @@ func compareCliVersions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(writer, "GhostWriter\tLocal Version\t%s\n", dockerCurrentVersion)
+	fmt.Fprintf(writer, "Ghostwriter\tLocal Version\t%s\n", dockerCurrentVersion)
 
 	gwcliLatestVersion, htmlUrl, err := utils.GetRemoteVersion("GhostManager", "Ghostwriter_CLI")
 	if err != nil {

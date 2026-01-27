@@ -9,14 +9,15 @@ import (
 	"path/filepath"
 
 	docker "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
+	internal "github.com/GhostManager/Ghostwriter_CLI/cmd/internal"
 	"github.com/spf13/cobra"
 )
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Installs/updates and sets up Ghostwriter",
-	Long: `Installs/updates and sets up Ghostwriter. By default, Ghostwriter will download and
+	Short: "Installs and sets up Ghostwriter",
+	Long: `Installs and sets up Ghostwriter. By default, Ghostwriter will download and
 install the latest version to an application data directory - use the "--mode" option to use a
 source checkout instead.
 
@@ -45,42 +46,87 @@ func init() {
 	rootCmd.AddCommand(installCmd)
 }
 
+func fetchAndWriteComposeFile(mode internal.DockerMode, version string) error {
+	dir := docker.GetDockerDirFromMode(mode)
+	file := "docker-compose.yml"
+
+	fmt.Println("[+] Downloading docker-compose.yml")
+
+	var url string
+	if version == "" {
+		url = "https://github.com/GhostManager/Ghostwriter/releases/latest/download/gw-cli.yml"
+	} else {
+		url = "https://github.com/GhostManager/Ghostwriter/releases/download/" + version + "/gw-cli.yml"
+	}
+
+	res, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("Could not get gw-cli.yml from github: %w", err)
+	}
+	if res.StatusCode != 200 {
+		if res.StatusCode == 404 {
+			return fmt.Errorf("Could not get gw-cli.yml from github: status code %d\n(Ghostwriter-CLI cannot install versions of Ghostwriter older than v6.2.2 in `--mode=production`. If you're trying to install a version later than that, try updating Ghostwriter-CLI)", res.StatusCode)
+		}
+		return fmt.Errorf("Could not get gw-cli.yml from github: status code %d", res.StatusCode)
+	}
+
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("Could not get gw-cli.yml from github: %w", err)
+	}
+
+	err = os.WriteFile(
+		filepath.Join(dir, file),
+		buf,
+		0666,
+	)
+
+	if err != nil {
+		return fmt.Errorf("Could write docker-compose.yml file: %w", err)
+	}
+	return nil
+}
+
+// Performs common setup
+func updateContainers(dockerInterface docker.DockerInterface) error {
+	var err error
+	if dockerInterface.ManageComposeFile {
+		fmt.Println("[+] Pulling containers...")
+		err = dockerInterface.RunComposeCmd("pull")
+		if err != nil {
+			return fmt.Errorf("Could not pull containers: %w", err)
+		}
+	} else {
+		fmt.Println("[+] Building containers...")
+		err = dockerInterface.RunComposeCmd("build", "--pull")
+		if err != nil {
+			return fmt.Errorf("Could not build containers: %w", err)
+		}
+	}
+
+	fmt.Println("[+] Migrating database...")
+	err = dockerInterface.RunDjangoManageCommand("migrate")
+	if err != nil {
+		return fmt.Errorf("Could not migrate database: %w", err)
+	}
+
+	fmt.Println("[+] Seeding database with initial data...")
+	seedErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "/seed_data")
+	if seedErr != nil {
+		return fmt.Errorf("Could not seed database: %w", err)
+	}
+
+	return nil
+}
+
 func installGhostwriter(cmd *cobra.Command, args []string) {
+	var err error
+
 	if mode == docker.ModeProd {
-		// Fetch (new) docker compose file before initializing the interface
-		dir := docker.GetDockerDirFromMode(mode)
-		file := "docker-compose.yml"
-
-		fmt.Println("[+] Downloading docker-compose.yml")
-
-		var url string
-		if installVersion == "" {
-			url = "https://github.com/GhostManager/Ghostwriter/releases/latest/download/gw-cli.yml"
-		} else {
-			url = "https://github.com/GhostManager/Ghostwriter/releases/download/" + installVersion + "/gw-cli.yml"
-		}
-
-		res, err := http.Get(url)
+		// Fetch and write docker-compose.yml file
+		err = fetchAndWriteComposeFile(mode, installVersion)
 		if err != nil {
-			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
-		}
-		if res.StatusCode != 200 {
-			log.Fatalf("Error trying to download gw-cli.yml from GitHub: HTTP status code %d", res.StatusCode)
-		}
-
-		buf, err := io.ReadAll(res.Body)
-		if err != nil {
-			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
-		}
-
-		err = os.WriteFile(
-			filepath.Join(dir, file),
-			buf,
-			0644,
-		)
-
-		if err != nil {
-			log.Fatalf("Error trying to download gw-cli.yml from GitHub: %v", err)
+			log.Fatalf("%v", err)
 		}
 	}
 
@@ -94,33 +140,11 @@ func installGhostwriter(cmd *cobra.Command, args []string) {
 		docker.GenerateCertificatePackage(dockerInterface.Dir)
 	}
 
-	// Build/pull
-	var err error
-	if dockerInterface.ManageComposeFile {
-		fmt.Println("[+] Pulling containers...")
-		err = dockerInterface.RunComposeCmd("pull")
-		if err != nil {
-			log.Fatalf("Error trying to pull with %s: %v\n", dockerInterface.ComposeFile, err)
-		}
-	} else {
-		fmt.Println("[+] Building containers...")
-		err = dockerInterface.RunComposeCmd("build", "--pull")
-		if err != nil {
-			log.Fatalf("Error trying to BUILD with %s: %v\n", dockerInterface.ComposeFile, err)
-		}
-	}
-
-	fmt.Println("[+] Migrating database...")
-	err = dockerInterface.RunDjangoManageCommand("migrate")
+	err = updateContainers(*dockerInterface)
 	if err != nil {
-		log.Fatalf("Error migrating database: %s\n", err)
+		log.Fatalf("%v\n", err)
 	}
 
-	fmt.Println("[+] Proceeding with Django database setup...")
-	seedErr := dockerInterface.RunComposeCmd("run", "--rm", "django", "/seed_data")
-	if seedErr != nil {
-		log.Fatalf("Error trying to seed the database: %v\n", seedErr)
-	}
 	fmt.Println("[+] Proceeding with Django superuser creation...")
 	userErr := dockerInterface.RunDjangoManageCommand("createsuperuser", "--noinput", "--role", "admin")
 	// This may fail if the user has already created a superuser, so we don't exit

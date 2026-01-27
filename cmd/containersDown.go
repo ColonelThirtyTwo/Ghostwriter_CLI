@@ -35,7 +35,9 @@ func containersDown(cmd *cobra.Command, args []string) {
 	} else {
 		fmt.Println("[+] Bringing down the production environment")
 	}
-	err := dockerInterface.Down(volumes)
+	err := dockerInterface.Down(&docker.DownOptions{
+		Volumes: volumes,
+	})
 	if err != nil {
 		log.Fatalf("Error trying to bring down the containers with %s: %v\n", dockerInterface.ComposeFile, err)
 	}

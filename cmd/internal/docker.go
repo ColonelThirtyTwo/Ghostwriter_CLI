@@ -242,12 +242,23 @@ func (this DockerInterface) Up() error {
 	return this.RunComposeCmd("up", "-d")
 }
 
-// Take down all containers
-func (this DockerInterface) Down(volumes bool) error {
+// Options for `Down`
+type DownOptions struct {
+	// Pass `--volumes` to delete the project's volumes as well (will lose data!)
+	Volumes bool
+	// Pass `--remove-orphans` to delete orphaned service containers
+	RemoveOrphans bool
+}
+
+// Take down all containers. `opts` are optional
+func (this DockerInterface) Down(opts *DownOptions) error {
 	fmt.Printf("[+] Running `%s` to take down the containers with %s...\n", this.command, this.ComposeFile)
 	args := []string{"down"}
-	if volumes {
+	if opts.Volumes {
 		args = append(args, "--volumes")
+	}
+	if opts.RemoveOrphans {
+		args = append(args, "--remove-orphans")
 	}
 	return this.RunComposeCmd(args...)
 }

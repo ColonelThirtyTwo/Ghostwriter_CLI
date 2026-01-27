@@ -43,7 +43,7 @@ func buildContainers(cmd *cobra.Command, args []string) {
 	}
 	dockerInterface.Env.Save()
 
-	downErr := dockerInterface.Down(false)
+	downErr := dockerInterface.Down(nil)
 	if downErr != nil {
 		log.Fatalf("Error trying to bring down any running containers with %s: %v\n", dockerInterface.ComposeFile, downErr)
 	}

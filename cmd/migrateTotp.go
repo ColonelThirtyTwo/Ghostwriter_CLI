@@ -31,7 +31,7 @@ func migrateTotp(cmd *cobra.Command, args []string) {
 	fmt.Print("Press enter to continue, or Ctrl+C to cancel\n")
 	reader.ReadString('\n')
 
-	err := dockerInterface.Down(false)
+	err := dockerInterface.Down(nil)
 	if err != nil {
 		log.Fatalf("Error trying to bring down the containers with %s: %v\n", dockerInterface.ComposeFile, err)
 	}
